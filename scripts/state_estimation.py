@@ -64,8 +64,7 @@ class StateEstimation:
 
     def receive_odom(self, odom_msg:Odometry):
         # ÉTAPE DE CORRECTION
-        dt = (rospy.Time.now() - self.last_time_odom).to_sec() # TODO unused ??
-
+        
         # matrice de correction
         C = np.array([[0, 0, 0, 1, 0],
                       [0, 0, 0, 0, 1]])
@@ -86,6 +85,19 @@ class StateEstimation:
         self.X = self.X + np.dot(self.K , (Z - np.dot(C, self.X)))
         # Pk|k = ( I - Kk * C ) * Pk|k-1
         self.P = np.dot((np.eye(5) - np.dot(self.K, C)), self.P)
+
+
+        # # TODO enlever
+        # self.X[0] = odom_msg.pose.pose.position.x
+        # self.X[1] = odom_msg.pose.pose.position.y
+        # # theta euler
+        # self.X[2] = math.atan2(odom_msg.pose.pose.orientation.z, odom_msg.pose.pose.orientation.w) * 2
+        # self.linear_speed = odom_msg.twist.twist.linear.x
+        # self.angular_speed = odom_msg.twist.twist.angular.z
+        # self.X[3] = self.linear_speed
+        # self.X[4] = self.angular_speed
+
+
 
    
     def publish_estimate(self):
