@@ -70,7 +70,7 @@ class Controller:
 
         if self.is_turning:
             if self.is_moving:
-                self.max_angular_velocity = 0.1
+                self.max_angular_velocity = 0.2
             else:
                 self.max_angular_velocity = MAX_ANG_VEL
             angle_rad = math.atan2(vec_target[1], vec_target[0]) - self.current_pose[2]

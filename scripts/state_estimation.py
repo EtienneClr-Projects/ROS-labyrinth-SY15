@@ -53,8 +53,8 @@ class StateEstimation:
             [0.001, 0, 0, 0, 0],
             [0, 0.001, 0, 0, 0],
             [0, 0, 0.001, 0, 0],
-            [0, 0, 0, 0.00001, 0],
-            [0, 0, 0, 0, 0.00001]
+            [0, 0, 0, 0.001, 0],
+            [0, 0, 0, 0, 0.001]
         ])
 
         # P_k|k+1 = F_k*P_k|k*F_k.T + Q
@@ -76,8 +76,8 @@ class StateEstimation:
         Z = np.array([[self.linear_speed], [self.angular_speed]])
 
         #covariance de l'observation. matrice de taille 2x2
-        Rk = np.array([[0.0001, 0],
-                       [0, 0.0001]])
+        Rk = np.array([[0.005, 0],
+                       [0, 0.005]])
 
         # Kk = Pk|k-1 * C^T * ( C * Pk|k-1 * C^T + Rk )^-1
         self.K = np.dot(self.P, np.dot(C.T, np.linalg.inv(np.dot(np.dot(C, self.P), C.T) + Rk)))
