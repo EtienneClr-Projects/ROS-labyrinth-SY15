@@ -80,7 +80,7 @@ class Controller:
                 print("POSITION OK", vec_target[:2])
                 self.is_moving = False
             else:
-                linear_speed = vec_target[0] * cos(self.current_pose[2]) + vec_target[1] * sin(self.current_pose[2])
+                linear_speed = np.linalg.norm(vec_target[:2])
                 linear_speed = min(self.max_linear_velocity, linear_speed)
                 linear_speed = max(-self.max_linear_velocity, linear_speed)
 

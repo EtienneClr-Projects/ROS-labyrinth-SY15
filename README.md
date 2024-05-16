@@ -1,4 +1,4 @@
-# ROS-labyrinth-SY15
+# ros_labyrinth_sy15
 
 
 
@@ -16,6 +16,6 @@ rosrun turtlebot3_teleop turtlebot3_teleop_key
 
 Lancer Gazebo :
 ```
-roslaunch SY15 gazebo_simulation.launch
+roslaunch ros_labyrinth_sy15 gazebo_simulation.launch
 ```
 

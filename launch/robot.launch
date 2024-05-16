@@ -1,4 +1,4 @@
 <launch>
-  <node name="control_node" pkg="SY15" type="control_node.py" output="screen"></node>
-  <node name ="estimation_node" pkg="SY15" type="estimation_node.py" output="screen"></node>
+  <node name="control_node" pkg="ros_labyrinth_sy15" type="control_node.py" output="screen"></node>
+  <node name ="estimation_node" pkg="ros_labyrinth_sy15" type="estimation_node.py" output="screen"></node>
 </launch>
