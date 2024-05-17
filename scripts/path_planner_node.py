@@ -11,7 +11,7 @@ from math import cos, sin, atan2
 class PathPlanner:
     def __init__(self):
         rospy.init_node("path_planner_node", log_level=rospy.INFO)
-        rospy.loginfo("Démarrage du nœud de planning")
+        rospy.loginfo("Starting planning node...")
 
         # sub to the current position
         self.estimate_subscriber = rospy.Subscriber("/estimation", PoseWithCovarianceStamped, self.receive_estimate_pose)
