@@ -60,8 +60,6 @@ class PathPlanner:
         self.costmap = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
         self.origin_x = 0
         self.origin_y = 0
-        
-        self.one = False
 
     def receive_lidar(self, msg):
         # update the costmap
@@ -82,8 +80,8 @@ class PathPlanner:
             angle = scan.angle_min + i * scan.angle_increment
             x = self.current_pose[0] + distance * cos(angle + self.current_pose[2])
             y = self.current_pose[1] + distance * sin(angle + self.current_pose[2])
-            grid_x = int((y - self.origin_x) / self.resolution + self.costmap_size // 2)
-            grid_y = int((x - self.origin_y) / self.resolution + self.costmap_size // 2)
+            grid_x = int((x - self.origin_x) / self.resolution + self.costmap_size // 2)
+            grid_y = int((y - self.origin_y) / self.resolution + self.costmap_size // 2)
 
             if 0 <= grid_x < self.costmap_size and 0 <= grid_y < self.costmap_size:
                 self.costmap[grid_x, grid_y] = 100  # Mark the cell as occupied
@@ -138,10 +136,14 @@ class PathPlanner:
             chemin_deja_visite.add(current_state)
             for dx, dy in actions:
                 next_pos = (current_state.x + dx, current_state.y + dy)
-                next_cost = dist_manhattan(next_pos, goal)
+                next_cost = -1 if (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] else 0
+                next_cost = dist_manhattan(next_pos, goal) + next_cost
                 new_state = Etats(current_state.x + dx, current_state.y + dy, next_cost, current_state.liste_actions + [(dx, dy)])
-                print(f"new state x : {new_state.x} ; y : {new_state.y} ; costmap : {self.costmap[new_state.y, new_state.x]} ; path cost : {new_state.cost}")
-                if self.costmap[next_pos[1], next_pos[0]] == 100:
+                print(f"new state x : {new_state.x} ; y : {new_state.y} ; costmap : {self.costmap[new_state.x, new_state.y]} ; path cost : {new_state.cost}")
+                if self.costmap[next_pos[0], next_pos[1]] == 100:
+                    chemin_deja_visite.add(new_state)
+                    continue
+                if any(self.costmap[next_pos[0] + dy, next_pos[1] + dx] == 100 for dx in range(-1, 2) for dy in range(-1, 2)):
                     chemin_deja_visite.add(new_state)
                     continue
                 # on vérifie si c'est un chemin déjà visité
@@ -192,6 +194,9 @@ class PathPlanner:
         poses = []
         current_pos = grid_start
 
+        if path is None:
+            return
+
         for action in path:
             pose = PoseStamped()
             pose.header.stamp = rospy.Time.now()
@@ -212,17 +217,11 @@ class PathPlanner:
         path_msg.poses = poses
         path_msg.header.stamp = rospy.Time.now()
         self.path_pub.publish(path_msg)
-
-        if path is None:
-            return
         
         current_pos = grid_start
-        count = 0
 
-        while path and count < 5:
-            count += 1
-            next_point = path.pop(0)
-            current_pos = (current_pos[0] + action[0], current_pos[1] + action[1])
+        for next_point in path:
+            current_pos = (current_pos[0] + next_point[0], current_pos[1] + next_point[1])
 
             goal_pose = PoseStamped()
             goal_pose.header.stamp = rospy.Time.now()
