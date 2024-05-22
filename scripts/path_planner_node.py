@@ -82,8 +82,8 @@ class PathPlanner:
             angle = scan.angle_min + i * scan.angle_increment
             x = self.current_pose[0] + distance * cos(angle + self.current_pose[2])
             y = self.current_pose[1] + distance * sin(angle + self.current_pose[2])
-            grid_x = int((x - self.origin_x) / self.resolution + self.costmap_size // 2)
-            grid_y = int((y - self.origin_y) / self.resolution + self.costmap_size // 2)
+            grid_x = int((y - self.origin_x) / self.resolution + self.costmap_size // 2)
+            grid_y = int((x - self.origin_y) / self.resolution + self.costmap_size // 2)
 
             if 0 <= grid_x < self.costmap_size and 0 <= grid_y < self.costmap_size:
                 self.costmap[grid_x, grid_y] = 100  # Mark the cell as occupied
@@ -140,8 +140,8 @@ class PathPlanner:
                 next_pos = (current_state.x + dx, current_state.y + dy)
                 next_cost = dist_manhattan(next_pos, goal)
                 new_state = Etats(current_state.x + dx, current_state.y + dy, next_cost, current_state.liste_actions + [(dx, dy)])
-                print(f"new state x : {new_state.x} ; y : {new_state.y} ; costmap : {self.costmap[new_state.x, new_state.y]} ; path cost : {new_state.cost}")
-                if self.costmap[next_pos[0], next_pos[1]] == 100:
+                print(f"new state x : {new_state.x} ; y : {new_state.y} ; costmap : {self.costmap[new_state.y, new_state.x]} ; path cost : {new_state.cost}")
+                if self.costmap[next_pos[1], next_pos[0]] == 100:
                     chemin_deja_visite.add(new_state)
                     continue
                 # on vérifie si c'est un chemin déjà visité
@@ -217,21 +217,19 @@ class PathPlanner:
             return
         
         current_pos = grid_start
+        count = 0
 
-        if path is not None:
-            self.path_queue.clear()
-            for point in path:
-                self.path_queue.append(point)
-
-        while self.path_queue:
-            next_point = self.path_queue.popleft()
+        while path and count < 5:
+            count += 1
+            next_point = path.pop(0)
+            current_pos = (current_pos[0] + action[0], current_pos[1] + action[1])
 
             goal_pose = PoseStamped()
             goal_pose.header.stamp = rospy.Time.now()
             goal_pose.header.frame_id = "odom"
 
-            goal_pose.pose.position.x = (next_point[0] - self.costmap_size // 2) * self.resolution + self.origin_x
-            goal_pose.pose.position.y = (next_point[1] - self.costmap_size // 2) * self.resolution + self.origin_y
+            goal_pose.pose.position.x = (current_pos[0] - self.costmap_size // 2) * self.resolution + self.origin_x
+            goal_pose.pose.position.y = (current_pos[1] - self.costmap_size // 2) * self.resolution + self.origin_y
             goal_pose.pose.position.z = 0
 
             q = quaternion_from_euler(0, 0, self.goal_pose[2])
