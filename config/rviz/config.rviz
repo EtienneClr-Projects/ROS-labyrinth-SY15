@@ -6,11 +6,9 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /LaserScan1/Status1
+        - /Grid1
         - /Odometry1/Shape1
-        - /PoseWithCovariance1/Status1
-        - /Map1
-        - /Map1/Status1
+        - /Goal Pose1
       Splitter Ratio: 0.5
     Tree Height: 719
   - Class: rviz/Selection
@@ -54,7 +52,7 @@ Visualization Manager:
         Z: 0
       Plane: XY
       Plane Cell Count: 10
-      Reference Frame: <Fixed Frame>
+      Reference Frame: odom
       Value: true
     - Class: rviz/TF
       Enabled: true
@@ -172,7 +170,7 @@ Visualization Manager:
       Enabled: true
       Head Length: 0.30000001192092896
       Head Radius: 0.10000000149011612
-      Name: Pose
+      Name: Goal Pose
       Queue Size: 10
       Shaft Length: 1
       Shaft Radius: 0.05000000074505806
@@ -181,7 +179,7 @@ Visualization Manager:
       Unreliable: false
       Value: true
     - Alpha: 1
-      Axes Length: 1
+      Axes Length: 0.30000001192092896
       Axes Radius: 0.10000000149011612
       Class: rviz/PoseWithCovariance
       Color: 255; 25; 0
@@ -200,7 +198,7 @@ Visualization Manager:
           Scale: 1
           Value: true
         Value: true
-      Enabled: true
+      Enabled: false
       Head Length: 0.30000001192092896
       Head Radius: 0.10000000149011612
       Name: PoseWithCovariance
@@ -210,7 +208,7 @@ Visualization Manager:
       Shape: Axes
       Topic: /estimation
       Unreliable: false
-      Value: true
+      Value: false
     - Alpha: 0.699999988079071
       Class: rviz/Map
       Color Scheme: costmap
@@ -220,6 +218,30 @@ Visualization Manager:
       Topic: /costmap
       Unreliable: false
       Use Timestamp: false
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.029999999329447746
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 10
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /path_debug
+      Unreliable: false
       Value: true
   Enabled: true
   Global Options:
@@ -248,7 +270,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: -4.9849982261657715
+      Angle: -4.710000514984131
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
@@ -258,10 +280,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: -204.14434814453125
+      Scale: -284.524169921875
       Target Frame: <Fixed Frame>
-      X: 1.5177457332611084
-      Y: -0.3763810098171234
+      X: 0.39882153272628784
+      Y: 0.23921698331832886
     Saved: ~
 Window Geometry:
   Displays:
@@ -279,5 +301,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1848
-  X: 1920
-  Y: 0
+  X: 72
+  Y: 27

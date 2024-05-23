@@ -1,6 +1,9 @@
+#!/usr/bin/env python3
+
 import rospy
 
 from geometry_msgs.msg import PoseWithCovarianceStamped,PoseStamped, Twist
+from std_msgs.msg import Empty
 
 import numpy as np
 from math import atan2, pi
@@ -17,6 +20,8 @@ class Controller:
         self.cmd_vel_publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=1)
         self.estimate_subscriber = rospy.Subscriber("/estimation", PoseWithCovarianceStamped, self.receive_estimate_pose)
         self.goal_subscriber = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.receive_target_pose)
+        self.is_goal_reached_publisher = rospy.Publisher("/is_goal_reached", Empty, queue_size=1)
+        
 
         # target position
         self.target_pose = np.array([0., 0., 0.]) #x,y,theta
@@ -40,15 +45,23 @@ class Controller:
                                      atan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w) * 2])
 
     def receive_target_pose(self, msg):
-        print("#################")
-        print(f"Received GOAL : {msg.pose.position.x}, {msg.pose.position.y}")
-        print("#################")
-
-        self.target_pose = np.array([
+        def almost_equal(A, B):
+            return np.linalg.norm(A-B) < 0.01
+                
+        new_target_pose = np.array([
             msg.pose.position.x,
             msg.pose.position.y,
             atan2(msg.pose.orientation.z, msg.pose.orientation.w) * 2
         ])
+
+        # if received same goal, return
+        if self.target_pose is not None and almost_equal(new_target_pose, self.target_pose):
+            return
+        print("#################")
+        print(f"Received GOAL : {msg.pose.position.x}, {msg.pose.position.y}")
+        print("#################")
+        self.target_pose = new_target_pose
+
         self.is_turning = True
         self.is_moving = False
 
@@ -78,7 +91,7 @@ class Controller:
                 angle_rad += 2 * pi
 
             # if we are close enough to the targeted angle, we stop
-            if abs(angle_rad) < 0.005:
+            if abs(angle_rad) < 0.01:
                 print("ANGLE OK")
                 # self.is_turning = False # uncomment to do only translation in the second phase
                 self.is_moving = True
@@ -100,6 +113,8 @@ class Controller:
                 self.target_pose = None
                 linear_speed = 0.
                 angular_speed = 0.
+
+                self.is_goal_reached_publisher.publish(Empty())
             else:
                 linear_speed = np.linalg.norm(error_vector[:2])
                 linear_speed = min(self.max_linear_velocity, linear_speed)
