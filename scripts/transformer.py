@@ -6,6 +6,8 @@ import rospy
 # Type of input and output messages
 from sensor_msgs.point_cloud2 import create_cloud, read_points
 from sensor_msgs.msg import LaserScan, PointCloud2, PointField
+from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, Quaternion
+from tf.transformations import quaternion_from_euler
 
 PC2FIELDS = [PointField('x', 0, PointField.FLOAT32, 1),
              PointField('y', 4, PointField.FLOAT32, 1),
@@ -86,13 +88,10 @@ def callback(msg):
         for k in range (len(points)) :
             
             if i == num_groups:
-                print("points")
-                print(points[k])
                 p_list.append(points[k])
-                print(p_list)
                 i_list.append(intensities[k])
         i+=1
-        print(p_list)
+        # print(p_list)
         groups_ordre.append(p_list)
         groups_intensity.append(i_list)
 
@@ -145,21 +144,31 @@ def callback(msg):
 
     r = r - 0.1
 
+
     point_final = r*np.cos(theta), r*np.sin(theta)
 
-    # print("groupe")
-    # print(groups_ordre)
-    # print(groups_intensity)
+    print("point finale")
+    print(point_final)
 
-    
-    #groups2 = []
-    #for i in range(1, len(groups)):
-    #    if len(groups[i]) > 2:
-    #        groups2.append(groups[i])
+    goal_pose = PoseStamped()
+    goal_pose.header.stamp = rospy.Time.now()
+    goal_pose.header.frame_id = "odom"
+
+    goal_pose.pose.position.x = point_final[0]
+    goal_pose.pose.position.y = point_final[1]
+    goal_pose.pose.position.z = 0
+
+    # q = quaternion_from_euler(0, 0, goal_pose[2])
+    # goal_pose.pose.orientation = Quaternion(*q)
+
+    goal_publisher = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
+    goal_publisher.publish(goal_pose)
         
         
-    clust_msg = create_cloud(msg.header, PC2FIELDS, [[points[i,0],points[i,1],0,c] for i,c in enumerate(groups)])
-    pub_clusters.publish(clust_msg)
+    # clust_msg = create_cloud(msg.header, PC2FIELDS, [[points[i,0],points[i,1],0,c] for i,c in enumerate(groups)])
+    # pub_clusters.publish(clust_msg)
+
+period = 2
 
 if __name__ == '__main__':
     rospy.init_node('transformer')
@@ -168,4 +177,6 @@ if __name__ == '__main__':
 
     #pub_pc2 = rospy.Publisher('/lidar/points', PointCloud2, queue_size=10)
     rospy.Subscriber('/scan', LaserScan, callback)
+
+    rospy.Timer(rospy.Duration(period), callback)
     rospy.spin()
