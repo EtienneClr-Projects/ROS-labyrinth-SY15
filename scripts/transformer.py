@@ -20,9 +20,7 @@ def callback(msg):
 
     for i, theta in enumerate(np.arange(msg.angle_min, msg.angle_max, msg.angle_increment)):
         
-        if msg.ranges[i] == float("inf"):
-        	pass
-        else:
+        if not(msg.ranges[i] == float("inf")):
             if msg.ranges[i] > 0.1:
                 coords.append((msg.ranges[i]*np.cos(theta), msg.ranges[i]*np.sin(theta))) 
                 intensities.append(msg.intensities[i])
@@ -38,8 +36,6 @@ def callback(msg):
     # print(msg.intensities)
     #print(msg.intensities[i] for i in range (len(points)))
     #intensities = np.array(msg.intensities[i] for i in range (len(msg.intensities)))
-    
-    print("////////////////////////////////////////////////////////////////////")
     #print(len(intensities))
     #intensities = np.array(list(read_points(msg)))[:,:3]
     groups = np.zeros(points.shape[0], dtype=int)
@@ -99,6 +95,57 @@ def callback(msg):
         print(p_list)
         groups_ordre.append(p_list)
         groups_intensity.append(i_list)
+
+
+
+    #suppresion des petits groupes
+    groups_ordre_tmp = []
+    groups_intensity_tmp = []
+    for i in range (len(groups_ordre)):
+        if len(groups_ordre[i]) > 2:
+            groups_ordre_tmp.append(groups_ordre[i])
+            groups_intensity_tmp.append(groups_intensity[i])
+
+    groups_ordre = groups_ordre_tmp
+    groups_intensity = groups_intensity_tmp
+
+    num_groupe = 0
+    
+    max_intensity = sum(groups_intensity[0]) / len(groups_intensity[0])
+
+    #recherche de l'intensité la plus élevé
+    for i in range (len(groups_ordre)):
+        moyenne_intensity = sum(groups_intensity[i]) / len(groups_intensity[i])
+        if max_intensity < moyenne_intensity:
+            max_intensity = moyenne_intensity
+            num_groupe = i
+    
+    minimum =np.min(groups_ordre[num_groupe], axis=0)
+    maximum =np.max(groups_ordre[num_groupe], axis=0)
+
+    width = maximum[0] - minimum[0]
+    length = maximum[1] - minimum[1]
+
+    print("largeur")
+    print(width)
+
+    print("longueur")
+    print(length)
+
+    center = ((minimum[0] + width/2), minimum[1] + length/2)
+
+
+    #calcul du point d'arriver du robot 
+
+    theta = np.arctan(center[1]/center[0])
+    r = center[0] / np.cos(theta)
+
+    print("r avant modification")
+    print(r)
+
+    r = r - 0.1
+
+    point_final = r*np.cos(theta), r*np.sin(theta)
 
     # print("groupe")
     # print(groups_ordre)
