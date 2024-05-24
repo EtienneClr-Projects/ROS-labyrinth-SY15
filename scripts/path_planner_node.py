@@ -59,25 +59,26 @@ class PathPlanner:
         self.goal_reached = True
 
         # costmap
-        self.costmap_size = 2000  # points
+        self.costmap_size = 200  # points
         self.resolution = 0.05 # 
-        self.costmap = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
+        self.obstacle_layer = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
         self.origin_x = 0
         self.origin_y = 0
+
+        self.inflation_layer = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
 
     def receive_goal_reached(self, msg):
         self.goal_reached = True
 
     def receive_lidar(self, msg):
-        # update the costmap
         self.update_costmap(msg)
       
     def receive_estimate_pose(self, msg):
-        # Récupération de la position estimée
+        # get estimated position
         self.current_pose = np.array([msg.pose.pose.position.x,
                                      msg.pose.pose.position.y,
                                      atan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w) * 2])
-        
+
     def update_costmap(self, scan):
         # update the costmap with the lidar data
         for i, distance in enumerate(scan.ranges):
@@ -90,9 +91,19 @@ class PathPlanner:
             grid_y = int((y - self.origin_y) / self.resolution + self.costmap_size // 2)
 
             if 0 <= grid_x < self.costmap_size and 0 <= grid_y < self.costmap_size:
-                self.costmap[grid_y, grid_x] = 100  # Mark the cell as occupied
-            
+                self.obstacle_layer[grid_y, grid_x] = 100  # Mark the cell as occupied
 
+
+        # update inflation layer
+        self.inflation_layer = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
+        for i in range(self.costmap_size):
+            for j in range(self.costmap_size):
+                if self.obstacle_layer[j, i] == 100:
+                    for k in range(-3, 4):
+                        for l in range(-3, 4):
+                            if 0 <= i + k < self.costmap_size and 0 <= j + l < self.costmap_size:
+                                self.inflation_layer[j + l, i + k] += 10
+                    self.inflation_layer[j, i] = 100
 
 
         # publish the costmap
@@ -109,7 +120,8 @@ class PathPlanner:
         costmap_msg.info.origin.orientation.y = 0
         costmap_msg.info.origin.orientation.z = 0
         costmap_msg.info.origin.orientation.w = 1
-        costmap_msg.data = self.costmap.flatten().tolist()
+        costmap_msg.data = self.inflation_layer.flatten().tolist()
+        # costmap_msg.data = self.obstacle_layer.flatten().tolist()
         self.costmap_publisher.publish(costmap_msg)
 
 
@@ -125,12 +137,12 @@ class PathPlanner:
         # on va chercher à s'en éloigner + recherche dans un rayon de 2 cases autours de la position cible
         def distance_to_nearest_wall(pos):
             x, y = pos
-            if self.costmap[y, x] == 100:
+            if self.obstacle_layer[y, x] >= 100:
                 return 0
             distances = []
             for i in range(max(0, x-2), min(self.costmap_size, x+3)):
                 for j in range(max(0, y-2), min(self.costmap_size, y+3)):
-                    if self.costmap[j, i] == 100:
+                    if self.obstacle_layer[j, i] >= 100:
                         distances.append(dist((x, y), (i, j)))
             return min(distances) if distances else float('inf')
 
@@ -147,7 +159,8 @@ class PathPlanner:
         state = Etats(grid_start[0], grid_start[1], 0, [])
 
         # liste des actions possible pour le robot
-        actions = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)]
+        actions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        # actions = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)] # avec diagonales
         # setup des listes
         liste_chemin = queue.PriorityQueue()
         chemin_deja_visite = set()
@@ -168,7 +181,7 @@ class PathPlanner:
                     continue
 
                 # on vérifie si la position cible est un mur
-                if self.costmap[next_pos[1], next_pos[0]] == 100:
+                if self.obstacle_layer[next_pos[1], next_pos[0]] >= 100:
                     chemin_deja_visite.add(new_state)
                     continue
 
@@ -277,6 +290,9 @@ class PathPlanner:
         return poses_path
 
     def planning_loop(self, _):
+        def is_too_near(pos1, pos2):
+            return np.linalg.norm(np.array(pos1) - np.array(pos2)) < 0.05
+        
         start = (self.current_pose[0], self.current_pose[1])
         goal = (self.goal_pose[0], self.goal_pose[1])
 
@@ -284,20 +300,25 @@ class PathPlanner:
 
         # test : on recalcule A* que quand on a atteint le goal
         if self.goal_reached:
+            print("trying")
             movement_sequence = self.astar(start, goal)
             if movement_sequence is None:
                 print("movement seq is None")
                 return
             self.goal_reached = False
-            
+            print("convert seq")
             poses_path = self.convert_sequence_to_poses_path(movement_sequence, start)
             # print("poses_path",poses_path)
 
             # the goal is the next point on the path
-            goal = poses_path[1] # path[0] is the current position
+            i = 1
+            while is_too_near(self.current_pose[:2], poses_path[i]):
+                i += 1
+            goal = poses_path[i] # path[0] is the current position
 
             self.publish_path(poses_path)
             self.publish_goal(goal)
+            print("published goal")
 
     
        

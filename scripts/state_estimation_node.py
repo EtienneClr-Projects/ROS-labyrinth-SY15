@@ -22,7 +22,8 @@ class StateEstimation:
 
         # State (x,y,theta,v,w)
         self.X = np.zeros((5,1))
-        self.P = np.zeros((5,5))
+        self.P = np.eye(5) * 0.00001
+        # self.P = np.zeros((5,5))
 
         self.last_time_input = rospy.Time.now()
         self.last_time_odom = rospy.Time.now()
@@ -50,21 +51,21 @@ class StateEstimation:
         ])
 
         # model noise covariance (x,y,theta,v,w)
+        Q = np.array([    
+            [0.000001, 0, 0, 0, 0],
+            [0, 0.000001, 0, 0, 0],
+            [0, 0, 0.000001, 0, 0],
+            [0, 0, 0, 0.000001, 0],
+            [0, 0, 0, 0, 0.000001]
+        ])
+
         # Q = np.array([    
-        #     [0.0000001, 0, 0, 0, 0],
-        #     [0, 0.0000001, 0, 0, 0],
-        #     [0, 0, 0.0001, 0, 0],
+        #     [8.88636660e+00, 2.44867503e-02, 6.42378158e-02, 0, 0],
+        #     [2.44867503e-02, 6.38358037e-03, -1.83912837e-03, 0, 0],
+        #     [6.42378158e-02, -1.83912837e-03, 6.65869761e-02, 0, 0],
         #     [0, 0, 0, 0, 0],
         #     [0, 0, 0, 0, 0]
         # ])
-
-        Q = np.array([    
-            [8.88636660e+00, 2.44867503e-02, 6.42378158e-02, 0, 0],
-            [2.44867503e-02, 6.38358037e-03, -1.83912837e-03, 0, 0],
-            [6.42378158e-02, -1.83912837e-03, 6.65869761e-02, 0, 0],
-            [0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0]
-        ])
 
 # [[ 8.88636660e+00  2.44867503e-02  6.42378158e-02]
 #  [ 2.44867503e-02  6.38358037e-03 -1.83912837e-03]
@@ -85,14 +86,17 @@ class StateEstimation:
         self.linear_speed = odom_msg.twist.twist.linear.x # linear velocity
         self.angular_speed = odom_msg.twist.twist.angular.z # angular velocity
 
+        # x, y, theta = odom_msg.pose.pose.position.x, odom_msg.pose.pose.position.y, 2*math.atan2(2*odom_msg.pose.pose.orientation.z, 2*odom_msg.pose.pose.orientation.w)
+        # self.X = np.array([[x], [y], [theta], [self.linear_speed], [self.angular_speed]])
+
         Z = np.array([[self.linear_speed], [self.angular_speed]])
 
         # observation covariance matrix 2x2
-        # Rk = np.array([[0.000001, 0],
-        #                [0, 0.00001]])
+        Rk = np.array([[0.01, 0],
+                       [0, 0.00001]])
 
-        Rk = np.array([[1.94981967e-05, 6.75708086e-08],
-                       [6.75708086e-08, 1.28605945e-04]])
+        # Rk = np.array([[1.94981967e-05, 6.75708086e-08],
+        #                [6.75708086e-08, 1.28605945e-04]])
 
 # [[1.94981967e-05 6.75708086e-08]
 #  [6.75708086e-08 1.28605945e-04]]
@@ -118,7 +122,7 @@ class StateEstimation:
             theta += 2*math.pi 
         self.X[2][0] = theta       
 
-        print(f"X : {round(x,3)} ;\t Y : {round(y,3)} ;\t THETA : {round(theta,3)}")
+        # print(f"X : {round(x,3)} ;\t Y : {round(y,3)} ;\t THETA : {round(theta,3)}")
        
         covariance = np.zeros((3,3)) # We only need (x,y,theta)
        
@@ -150,7 +154,7 @@ class StateEstimation:
         rospy.spin()
 
        
-period = 0.1
+period = 0.05
 
 if __name__ == "__main__":
     node = StateEstimation()

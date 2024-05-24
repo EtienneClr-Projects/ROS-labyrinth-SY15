@@ -7,6 +7,7 @@ from std_msgs.msg import Empty
 
 import numpy as np
 from math import atan2, pi
+from time import time
 
 
 MAX_ANG_VEL = 1.
@@ -29,14 +30,16 @@ class Controller:
         self.current_pose = np.array([0., 0., 0.]) #x,y,theta
 
         # control parameters
-        self.max_linear_velocity = 0.25
-        self.max_angular_velocity = 1.
+        self.max_linear_velocity = 0.15
+        self.max_angular_velocity = 0.4
 
         # State machine : When a goal is received
         # - first we turn to the right direction
         # - then we move to the goal, still adjusting the direction
         self.is_turning = False
         self.is_moving = False
+
+        self.last_time = time()
 
 
     def receive_estimate_pose(self, msg):
@@ -77,7 +80,7 @@ class Controller:
 
         if self.is_turning:
             if self.is_moving: # reduce the angular speed when moving
-                self.max_angular_velocity = 0.2
+                self.max_angular_velocity = 0.4
             else:
                 self.max_angular_velocity = MAX_ANG_VEL
             angle_rad = atan2(error_vector[1], error_vector[0]) - self.current_pose[2]
@@ -88,8 +91,8 @@ class Controller:
                 angle_rad += 2 * pi
 
             # if we are close enough to the targeted angle, we stop
-            if abs(angle_rad) < 0.01:
-                print("ANGLE OK")
+            if abs(angle_rad) < 30*pi/180 and not self.is_moving or self.is_moving and abs(angle_rad)< 0.005:
+                # print("ANGLE OK")
                 # self.is_turning = False # uncomment to do only translation in the second phase
                 self.is_moving = True
                 angular_speed = 0.
@@ -104,7 +107,7 @@ class Controller:
         if self.is_moving:
             # if we are close enough to the target, we stop
             if np.linalg.norm(error_vector[:2]) < 0.05:
-                print("POSITION OK", error_vector[:2])
+                # print("POSITION OK", error_vector[:2])
                 self.is_moving = False
                 self.is_turning = False
                 self.target_pose = None
@@ -117,7 +120,7 @@ class Controller:
                 linear_speed = min(self.max_linear_velocity, linear_speed)
                 linear_speed = max(-self.max_linear_velocity, linear_speed)
 
-                # print("MOVING: ", linear_speed, "error=", vec_target[:2], "current_pose=", self.current_pose)
+                # print("MOVING: ", linear_speed, "error=", error_vector[:2], "current_pose=", self.current_pose)
 
         self.publish_cmd_vel(linear_speed,angular_speed)
 
