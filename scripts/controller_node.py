@@ -46,7 +46,7 @@ class Controller:
 
     def receive_target_pose(self, msg):
         def almost_equal(A, B):
-            return np.linalg.norm(A-B) < 0.01
+            return np.linalg.norm(A-B) < 0.005
                 
         new_target_pose = np.array([
             msg.pose.position.x,
@@ -57,9 +57,6 @@ class Controller:
         # if received same goal, return
         if self.target_pose is not None and almost_equal(new_target_pose, self.target_pose):
             return
-        print("#################")
-        print(f"Received GOAL : {msg.pose.position.x}, {msg.pose.position.y}")
-        print("#################")
         self.target_pose = new_target_pose
 
         self.is_turning = True
