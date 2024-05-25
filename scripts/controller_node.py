@@ -186,7 +186,7 @@ class Controller:
                     correction = correction_max
                 if correction < -correction_max:
                     correction = -correction_max
-                angular_speed += correction
+                angular_speed -= correction
         
         if self.target_pose is not None:
             self.publish_goal(self.target_pose)
