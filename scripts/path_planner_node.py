@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import rospy, queue, os, cv2, pickle
+from utils import dist_point_to_segment
 
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, Quaternion
 from std_msgs.msg import Empty
@@ -9,6 +9,7 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, Path
 
 import numpy as np
+import rospy, queue, os, cv2, pickle
 from math import cos, sin, atan2, pi, sqrt
 
 class Etats():
@@ -45,18 +46,15 @@ class PathPlanner:
         # sub to the lidar
         self.lidar_subscriber = rospy.Subscriber("/scan", LaserScan, self.receive_lidar)
 
-        # pub the goal
-        self.goal_publisher = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
-        self.goal_pose = np.array([4., -1., 0.])
-
         # pub the costmap
         self.costmap_publisher = rospy.Publisher("/costmap", OccupancyGrid, queue_size=1)
 
-        # debug path
-        self.path_pub = rospy.Publisher('/path_debug', Path, queue_size=10)
+        # path
+        self.path_pub = rospy.Publisher('/path', Path, queue_size=10)
 
         self.is_goal_reached_sub = rospy.Subscriber("/is_goal_reached", Empty, self.receive_goal_reached)
         self.goal_reached = True
+        self.goal_pose = np.array([4., -1., 0.])
 
         # costmap
         self.costmap_size = 200  # points
@@ -253,20 +251,6 @@ class PathPlanner:
         path_msg.header.stamp = rospy.Time.now()
         self.path_pub.publish(path_msg)
 
-    def publish_goal(self, goal):
-        goal_pose = PoseStamped()
-        goal_pose.header.stamp = rospy.Time.now()
-        goal_pose.header.frame_id = "odom"
-
-        goal_pose.pose.position.x = goal[0]
-        goal_pose.pose.position.y = goal[1]
-        goal_pose.pose.position.z = 0
-
-        q = quaternion_from_euler(0, 0, self.goal_pose[2])
-        goal_pose.pose.orientation = Quaternion(*q)
-
-        self.goal_publisher.publish(goal_pose)
-
     def convert_sequence_to_poses_path(self, path, start):
         # path is a sequence of (x,y) movement, with x,y = -1, 0 or 1
         # we convert the sequence to have only the keypoints of the movements
@@ -297,34 +281,9 @@ class PathPlanner:
 
         return poses_path
     
-    def get_next_goal_on_path(self, poses_path):
-        """
-        Returns the next goal on the path
-        Find the nearest line on the path to the robot and returns the end of the line
-        """
-        def dist_point_to_segment(point, seg_start, seg_end):
-            x0, y0 = point
-            x1, y1 = seg_start
-            x2, y2 = seg_end
-            return abs((x2-x1)*(y1-y0) - (x1-x0)*(y2-y1)) / sqrt((x2-x1)**2 + (y2-y1)**2)
-
-        segs = []
-        for i in range(1, len(poses_path)):
-            segs.append((poses_path[i-1], poses_path[i]))
-
-        min_dist = float('inf')
-        nearest_seg = None
-        for seg in segs:
-            dist = dist_point_to_segment(self.current_pose[:2], seg[0], seg[1])
-            if dist < min_dist:
-                min_dist = dist
-                nearest_seg = seg
-
-        return nearest_seg[1]
-
     def planning_loop(self, _):
-        def is_too_near(pos1, pos2):
-            return np.linalg.norm(np.array(pos1) - np.array(pos2)) < 0.05
+        # def is_too_near(pos1, pos2): # TODO delete ?
+        #     return np.linalg.norm(np.array(pos1) - np.array(pos2)) < 0.05
         
         start = (self.current_pose[0], self.current_pose[1])
         goal = (self.goal_pose[0], self.goal_pose[1])
@@ -338,11 +297,8 @@ class PathPlanner:
 
         poses_path = self.convert_sequence_to_poses_path(movement_sequence, start)
 
-        goal = self.get_next_goal_on_path(poses_path)
-
         self.publish_path(poses_path)
-        self.publish_goal(goal)
-        print("published goal:", goal)
+        print("published path")
 
     
        
