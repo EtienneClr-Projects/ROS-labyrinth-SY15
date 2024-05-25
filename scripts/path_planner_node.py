@@ -60,12 +60,16 @@ class PathPlanner:
 
         # costmap
         self.costmap_size = 200  # points
-        self.resolution = 0.05 # 
+        self.resolution = 0.05 # 5cm
         self.obstacle_layer = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
         self.origin_x = 0
         self.origin_y = 0
 
         self.inflation_layer = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
+
+        # timer callback update costmap
+        self.last_scan = None
+        rospy.Timer(rospy.Duration(1.), self.update_costmap_callback)
 
     def receive_goal_reached(self, msg):
         self.goal_reached = True
@@ -81,6 +85,10 @@ class PathPlanner:
 
     def update_costmap(self, scan):
         # update the costmap with the lidar data
+        self.last_scan = scan
+
+    def update_costmap_callback(self, _):
+        scan = self.last_scan
         for i, distance in enumerate(scan.ranges):
             if distance < scan.range_min or distance > scan.range_max:
                 continue
@@ -120,8 +128,8 @@ class PathPlanner:
         costmap_msg.info.origin.orientation.y = 0
         costmap_msg.info.origin.orientation.z = 0
         costmap_msg.info.origin.orientation.w = 1
-        costmap_msg.data = self.inflation_layer.flatten().tolist()
-        # costmap_msg.data = self.obstacle_layer.flatten().tolist()
+        # costmap_msg.data = self.inflation_layer.flatten().tolist()
+        costmap_msg.data = self.obstacle_layer.flatten().tolist()
         self.costmap_publisher.publish(costmap_msg)
 
 
@@ -298,27 +306,20 @@ class PathPlanner:
 
         # print("start",start,"goal",goal)
 
-        # test : on recalcule A* que quand on a atteint le goal
-        if self.goal_reached:
-            print("trying")
-            movement_sequence = self.astar(start, goal)
-            if movement_sequence is None:
-                print("movement seq is None")
-                return
-            self.goal_reached = False
-            print("convert seq")
-            poses_path = self.convert_sequence_to_poses_path(movement_sequence, start)
-            # print("poses_path",poses_path)
+        print("trying")
+        movement_sequence = self.astar(start, goal)
+        if movement_sequence is None:
+            print("movement seq is None")
+            return
+        self.goal_reached = False
+        print("convert seq")
+        poses_path = self.convert_sequence_to_poses_path(movement_sequence, start)
 
-            # the goal is the next point on the path
-            i = 1
-            while is_too_near(self.current_pose[:2], poses_path[i]):
-                i += 1
-            goal = poses_path[i] # path[0] is the current position
+        goal = poses_path[1] # path[0] is the current position
 
-            self.publish_path(poses_path)
-            self.publish_goal(goal)
-            print("published goal")
+        self.publish_path(poses_path)
+        self.publish_goal(goal)
+        print("published goal")
 
     
        
