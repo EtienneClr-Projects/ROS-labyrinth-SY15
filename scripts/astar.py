@@ -76,15 +76,13 @@ def astar(start, goal, costmap_size, resolution, origin_x, origin_y, costmap):
             if not (0 <= next_pos[0] < costmap_size and 0 <= next_pos[1] < costmap_size):
                 continue
 
-            next_cost = current_state.cost + (sqrt(2) if (dx, dy) in [(1, 1), (1, -1), (-1, 1), (-1, -1)] else 1)
-            new_state = Etats(next_pos[0], next_pos[1], next_cost, current_state.liste_actions + [(dx, dy)])
-
             # on vérifie si la position cible est un mur
             if costmap[next_pos[1], next_pos[0]] >= 100:
                 chemin_deja_visite.add(new_state)
                 continue
 
             # calcul du prochain coût pour la prochaine position
+            next_cost = current_state.cost + (sqrt(2) if (dx, dy) in [(1, 1), (1, -1), (-1, 1), (-1, -1)] else 1)
             margin = 0  # marge de sécurité en nombre de cellules
             distance_wall = distance_to_nearest_wall(next_pos, costmap, costmap_size)
 
@@ -99,6 +97,8 @@ def astar(start, goal, costmap_size, resolution, origin_x, origin_y, costmap):
                 # tourner, même en diagonal, a un coût
                 if (last_action[0], last_action[1]) != (dx, dy):
                     next_cost += 2
+
+            new_state = Etats(next_pos[0], next_pos[1], next_cost, current_state.liste_actions + [(dx, dy)])
 
             # on vérifie si c'est un chemin déjà visité
             if new_state in chemin_deja_visite:
