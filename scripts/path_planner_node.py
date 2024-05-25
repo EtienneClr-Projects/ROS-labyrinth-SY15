@@ -329,22 +329,20 @@ class PathPlanner:
         start = (self.current_pose[0], self.current_pose[1])
         goal = (self.goal_pose[0], self.goal_pose[1])
 
-        # print("start",start,"goal",goal)
 
-        print("trying")
         movement_sequence = self.astar(start, goal)
         if movement_sequence is None:
             print("movement seq is None")
             return
         self.goal_reached = False
-        print("convert seq")
+
         poses_path = self.convert_sequence_to_poses_path(movement_sequence, start)
 
         goal = self.get_next_goal_on_path(poses_path)
 
         self.publish_path(poses_path)
         self.publish_goal(goal)
-        print("published goal")
+        print("published goal:", goal)
 
     
        

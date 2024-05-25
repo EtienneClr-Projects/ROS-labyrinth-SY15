@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 
-import rospy
 
 from geometry_msgs.msg import PoseWithCovarianceStamped,PoseStamped, Twist
 from std_msgs.msg import Empty
 
+import rospy
 import numpy as np
 from math import atan2, pi
 from time import time
 
+from pid import PID
 
 MAX_ANG_VEL = 1.
 
@@ -32,6 +33,8 @@ class Controller:
         # control parameters
         self.max_linear_velocity = 0.15
         self.max_angular_velocity = 0.4
+        self.angle_control_pid = PID(1.0, 0.0, 0.0)
+        self.speed_control_pid = PID(1.0, 0.0, 0.0)
 
         # State machine : When a goal is received
         # - first we turn to the right direction
@@ -83,22 +86,21 @@ class Controller:
                 self.max_angular_velocity = 0.4
             else:
                 self.max_angular_velocity = MAX_ANG_VEL
-            angle_rad = atan2(error_vector[1], error_vector[0]) - self.current_pose[2]
+            angle_error_rad = atan2(error_vector[1], error_vector[0]) - self.current_pose[2]
             # modulo
-            if angle_rad > pi:
-                angle_rad -= 2 * pi
-            if angle_rad < -pi:
-                angle_rad += 2 * pi
+            if angle_error_rad > pi:
+                angle_error_rad -= 2 * pi
+            if angle_error_rad < -pi:
+                angle_error_rad += 2 * pi
 
             # if we are close enough to the targeted angle, we stop
-            if abs(angle_rad) < 30*pi/180 and not self.is_moving or self.is_moving and abs(angle_rad)< 0.005:
+            if abs(angle_error_rad) < 30*pi/180 and not self.is_moving or self.is_moving and abs(angle_error_rad)< 0.005:
                 # print("ANGLE OK")
                 # self.is_turning = False # uncomment to do only translation in the second phase
                 self.is_moving = True
                 angular_speed = 0.
             else:
-                #print(f"vec actuel : {self.X[:2, 0]}, vec target : {vec_target}, angle rad :{angle_rad} ")
-                angular_speed = angle_rad
+                angular_speed = self.angle_control_pid.update(angle_error_rad, period)
                 # constraint the angular speed between -MAX_ANG_VEL and MAX_ANG_VEL
                 angular_speed = min(self.max_angular_velocity, angular_speed)
                 angular_speed = max(-self.max_angular_velocity, angular_speed)
@@ -116,10 +118,11 @@ class Controller:
 
                 self.is_goal_reached_publisher.publish(Empty())
             else:
-                linear_speed = np.linalg.norm(error_vector[:2])
+                distance_error_m = np.linalg.norm(error_vector[:2])
+                linear_speed = self.speed_control_pid.update(distance_error_m, period)
+                # constraint the linear speed between -MAX_LIN_VEL and MAX_LIN_VEL
                 linear_speed = min(self.max_linear_velocity, linear_speed)
                 linear_speed = max(-self.max_linear_velocity, linear_speed)
-
                 # print("MOVING: ", linear_speed, "error=", error_vector[:2], "current_pose=", self.current_pose)
 
         self.publish_cmd_vel(linear_speed,angular_speed)
