@@ -2,6 +2,7 @@
 
 import numpy as np
 import rospy
+import math
 
 # Type of input and output messages
 from sensor_msgs.point_cloud2 import create_cloud, read_points
@@ -130,19 +131,32 @@ def callback(msg):
 
     print("longueur")
     print(length)
-
+    
     center = ((minimum[0] + width/2), minimum[1] + length/2)
+    
+    
+    premier_point_panneau = groups_ordre[num_groupe][0]
+    dernier_point_panneau = groups_ordre[num_groupe][-1]
+    
+    
+    A = dernier_point_panneau[0] - premier_point_panneau[0]
+    B = dernier_point_panneau[1] - premier_point_panneau[1]
+    
+    C = -(A * premier_point_panneau[0] + B * premier_point_panneau[1])
+
+    point_a_atteindre = (center[0]+A, center[1]+B)
 
 
     #calcul du point d'arriver du robot 
 
-    theta = np.arctan(center[1]/center[0])
+    theta = np.arctan(point_a_atteindre[1]/point_a_atteindre[0])
     r = center[0] / np.cos(theta)
 
     print("r avant modification")
     print(r)
 
-    r = r - 0.1
+    distance_centre_panneau = 0.3
+    r = r - distance_centre_panneau
 
 
     point_final = r*np.cos(theta), r*np.sin(theta)
@@ -156,17 +170,18 @@ def callback(msg):
 
     goal_pose.pose.position.x = point_final[0]
     goal_pose.pose.position.y = point_final[1]
-    goal_pose.pose.position.z = 0
+    
+    dis = math.sqrt((center[0]-premier_point_panneau[0])**2 + (center[1]-premier_point_panneau[1])**2)
+    
+    theta = math.arctan(dis/distance_centre_panneau)
 
-    # q = quaternion_from_euler(0, 0, goal_pose[2])
-    # goal_pose.pose.orientation = Quaternion(*q)
+    goal_pose.pose.orientation.z = math.sin(theta / 2)
+    goal_pose.pose.orientation.w = math.cos(theta / 2)
+    
 
     goal_publisher = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
     goal_publisher.publish(goal_pose)
-        
-        
-    # clust_msg = create_cloud(msg.header, PC2FIELDS, [[points[i,0],points[i,1],0,c] for i,c in enumerate(groups)])
-    # pub_clusters.publish(clust_msg)
+
 
 period = 2
 
