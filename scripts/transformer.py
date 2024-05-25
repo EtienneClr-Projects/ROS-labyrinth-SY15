@@ -3,6 +3,7 @@
 import numpy as np
 import rospy
 import math
+import time
 
 # Type of input and output messages
 from sensor_msgs.point_cloud2 import create_cloud, read_points
@@ -156,8 +157,7 @@ def callback(msg):
     print(r)
 
     distance_centre_panneau = 0.3
-    r = r - distance_centre_panneau
-
+    r = r - distance_centre_panneau + 0.05
 
     point_final = r*np.cos(theta), r*np.sin(theta)
 
@@ -171,14 +171,34 @@ def callback(msg):
     goal_pose.pose.position.x = point_final[0]
     goal_pose.pose.position.y = point_final[1]
     
-    dis = math.sqrt((center[0]-premier_point_panneau[0])**2 + (center[1]-premier_point_panneau[1])**2)
+    # dis = math.sqrt((center[0]-premier_point_panneau[0])**2 + (center[1]-premier_point_panneau[1])**2)
     
-    theta = math.arctan(dis/distance_centre_panneau)
+    # theta = math.arctan(dis/distance_centre_panneau)
 
-    goal_pose.pose.orientation.z = math.sin(theta / 2)
-    goal_pose.pose.orientation.w = math.cos(theta / 2)
+    # goal_pose.pose.orientation.z = math.sin(theta / 2)
+    # goal_pose.pose.orientation.w = math.cos(theta / 2)
+
+    goal_publisher = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
+    goal_publisher.publish(goal_pose)
     
+    
+    temp = 20
+    time(temp)
 
+    r = r - distance_centre_panneau
+
+    point_final = r*np.cos(theta), r*np.sin(theta)
+
+    print("point finale")
+    print(point_final)
+
+    goal_pose = PoseStamped()
+    goal_pose.header.stamp = rospy.Time.now()
+    goal_pose.header.frame_id = "odom"
+
+    goal_pose.pose.position.x = point_final[0]
+    goal_pose.pose.position.y = point_final[1]
+    
     goal_publisher = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
     goal_publisher.publish(goal_pose)
 
