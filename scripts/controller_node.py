@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from utils import dist_point_to_segment
+from utils import dist_point_to_segment_signed
 from pid import PID
 
 from geometry_msgs.msg import PoseWithCovarianceStamped,PoseStamped, Twist, Quaternion
@@ -40,9 +40,10 @@ class Controller:
         # control parameters
         self.max_linear_velocity = 0.15
         self.max_angular_velocity = 0.1
+        self.max_angular_velocity_while_moving = 0.4
         self.angle_control_pid = PID(1.0, 0.0, 0.0)
         self.speed_control_pid = PID(1.0, 0.0, 0.0)
-        self.dir_correction_pid = PID(1.0, 0.0, 0.0)
+        self.dir_correction_pid = PID(10.0, 0.0, 0.0)
 
         # State machine : When a goal is received
         # - first we turn to the right direction
@@ -89,16 +90,16 @@ class Controller:
         min_dist = float('inf')
         nearest_seg = None
         for seg in segs:
-            dist = dist_point_to_segment(self.current_pose[:2], seg[0], seg[1])
+            dist = abs(dist_point_to_segment_signed(self.current_pose[:2], seg[0], seg[1]))
             if dist < min_dist:
                 min_dist = dist
                 nearest_seg = seg
 
-        return nearest_seg[1]
+        return nearest_seg
 
     def receive_path(self, path_msg):
         self.path = path_msg
-        self.target_pose = self.get_next_goal_on_path(self.path)
+        self.target_pose = self.get_next_goal_on_path(self.path)[1] # end of the current segment
 
         # # if received same goal, return
         # if self.target_pose is not None and almost_equal(new_target_pose, self.target_pose):
@@ -118,7 +119,8 @@ class Controller:
 
     def control_loop(self,_):
         if self.path is not None:
-            self.target_pose = self.get_next_goal_on_path(self.path)
+            self.current_segment = self.get_next_goal_on_path(self.path)
+            self.target_pose = self.current_segment[1] # end of the current segment
 
         if self.target_pose is None:  # TODO useful?
             return
@@ -141,11 +143,17 @@ class Controller:
                 self.is_moving = True
                 angular_speed = 0.
             else:
+                # if we also move, we increase the max_angular_velocity
+                if self.is_moving:
+                    self.max_angular_velocity = self.max_angular_velocity_while_moving
+                else:
+                    self.max_angular_velocity = self.max_angular_velocity
+
                 angular_speed = self.angle_control_pid.update(angle_error_rad, period)
                 # constraint the angular speed between -MAX_ANG_VEL and MAX_ANG_VEL
                 angular_speed = min(self.max_angular_velocity, angular_speed)
                 angular_speed = max(-self.max_angular_velocity, angular_speed)
-                print("TURNING: error=", angle_error_rad, "vec_target=", error_vector, "current_pose=", self.current_pose)
+                # print("TURNING: error=", angle_error_rad, "vec_target=", error_vector, "current_pose=", self.current_pose)
 
         if self.is_moving:
             # if we are close enough to the target, we stop
@@ -164,12 +172,21 @@ class Controller:
                 # constraint the linear speed between -MAX_LIN_VEL and MAX_LIN_VEL
                 linear_speed = min(self.max_linear_velocity, linear_speed)
                 linear_speed = max(-self.max_linear_velocity, linear_speed)
-                print("MOVING: ", linear_speed, "error=", error_vector[:2], "current_pose=", self.current_pose)
+                # print("MOVING: ", linear_speed, "error=", error_vector[:2], "current_pose=", self.current_pose)
 
                 # adjust the direction to follow the line
                 # compute the dist to the current seg
                 dist = 0
-                # TODO
+                # if the points are different
+                if not np.array_equal(self.current_pose[:2], self.current_segment[1]):
+                    dist = dist_point_to_segment_signed(self.current_pose[:2], self.current_segment[0], self.current_segment[1])
+                correction = self.dir_correction_pid.update(dist, period)
+                correction_max = 0.1
+                if correction > correction_max:
+                    correction = correction_max
+                if correction < -correction_max:
+                    correction = -correction_max
+                angular_speed += correction
         
         if self.target_pose is not None:
             self.publish_goal(self.target_pose)

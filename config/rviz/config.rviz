@@ -168,11 +168,11 @@ Visualization Manager:
       Class: rviz/Pose
       Color: 255; 25; 0
       Enabled: true
-      Head Length: 0.30000001192092896
+      Head Length: 0.10000000149011612
       Head Radius: 0.10000000149011612
       Name: Goal Pose
       Queue Size: 10
-      Shaft Length: 1
+      Shaft Length: 0.10000000149011612
       Shaft Radius: 0.05000000074505806
       Shape: Arrow
       Topic: /move_base_simple/goal
@@ -280,10 +280,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: -291.95318603515625
+      Scale: -284.9761962890625
       Target Frame: <Fixed Frame>
-      X: 1.2881947755813599
-      Y: -0.21672005951404572
+      X: 1.0906192064285278
+      Y: -0.05034244805574417
     Saved: ~
 Window Geometry:
   Displays:
