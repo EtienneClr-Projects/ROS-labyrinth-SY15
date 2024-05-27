@@ -18,10 +18,18 @@ PC2FIELDS = [PointField('x', 0, PointField.FLOAT32, 1),
 
 boucle = True
 
+
 def callback(msg):
     coords = []
     intensities = []
 
+    # besion de faire qu'une boucle, pour envoyer les coordonnées
+    global boucle 
+    if boucle == False:
+        return
+    
+    boucle = False
+    
     # conversion des points en coordonnées (x,y) et suppression des points infini et des points de faible intensité 
     for i, theta in enumerate(np.arange(msg.angle_min, msg.angle_max, msg.angle_increment)):
         

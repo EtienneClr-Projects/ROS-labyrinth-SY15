@@ -156,9 +156,6 @@ def callback(msg):
 if __name__ == '__main__':
     rospy.init_node('transformer')
     pub_clusters = rospy.Publisher('/lidar/clusters', PointCloud2, queue_size=10)
-    #rospy.Subscriber('/lidar/points', PointCloud2, callback)
-
-    #pub_pc2 = rospy.Publisher('/lidar/points', PointCloud2, queue_size=10)
     rospy.Subscriber('/scan', LaserScan, callback)
 
     rospy.spin()
