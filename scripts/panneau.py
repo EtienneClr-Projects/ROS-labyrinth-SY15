@@ -21,6 +21,7 @@ boucle = True
 def callback(msg):
     
     # besion de faire qu'une boucle, pour envoyer les coordonnées
+    global boucle 
     if boucle == False:
         return
     
@@ -136,7 +137,7 @@ def callback(msg):
     
     
     temp = 20
-    time(temp)
+    time.sleep(temp)
 
     # re-calcul pour avoir une bonne orientation face au panneau 
     # je ne sais pas comment obtenir l'angle de fin donc je triche un peu en donnant un point à atteindre sur le vecteur normal
