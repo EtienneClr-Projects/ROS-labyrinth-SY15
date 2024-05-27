@@ -16,82 +16,128 @@ PC2FIELDS = [PointField('x', 0, PointField.FLOAT32, 1),
              PointField('c', 12, PointField.INT16, 1)
 ]
 
-boucle = True
+class Panneau_Controller():
+    def __init__(self) -> None:
+        rospy.init_node('transformer')
+        rospy.loginfo("Starting panneau node...")
 
+        self.pub_clusters = rospy.Publisher('/lidar/clusters', PointCloud2, queue_size=10)
 
-def callback(msg):
-    coords = []
-    intensities = []
+        rospy.Subscriber('/scan', LaserScan, self.callback_lidar)
+        self.last_scan = None
 
-    # besion de faire qu'une boucle, pour envoyer les coordonnées
-    global boucle 
-    if boucle == False:
-        return
-    
-    boucle = False
-    
-    # conversion des points en coordonnées (x,y) et suppression des points infini et des points de faible intensité 
-    for i, theta in enumerate(np.arange(msg.angle_min, msg.angle_max, msg.angle_increment)):
+        # we sub to /estimation to know when the robot has reached the panel
+        rospy.Subscriber('/estimation', PoseWithCovarianceStamped, self.callback_estimation)
+
+        rospy.Timer(rospy.Duration(period), self.callback_timer)
+
+        # Two states
+        # - Going to the front of the panel
+        # - Turning the robot to face the panel
+        self.state = "GOING_TO_PANEL"
+        self.panel_pose = None
+        self.panel_reached = False
+
+    def run(self):
+        rospy.spin()
+
+    def callback_lidar(self, lidar_msg):
+        self.last_scan = lidar_msg
+
+    def callback_estimation(self, estimation_msg):
+       # compare current pose to the panel pose
+        if self.panel_pose is None:
+            return
         
-        if not(msg.ranges[i] == float("inf")):
-            if msg.ranges[i] > 0.1 and msg.intensities[i] > 1000:
-                coords.append((msg.ranges[i]*np.cos(theta), msg.ranges[i]*np.sin(theta))) 
-                intensities.append(msg.intensities[i])
-    
-    # Create a PointCloud2 (si on souhaite les afficher dans rziv, on peut se servir de pc2)
-    pc2 = create_cloud(msg.header, PC2FIELDS, [[x,y,0,0] for x,y in coords])
+        x = estimation_msg.pose.pose.position.x
+        y = estimation_msg.pose.pose.position.y
 
-    points = np.array(list(read_points(pc2)))[:,:2]    
-    
-    # recherche du point à atteindre
-    minimum =np.min(points, axis=0)
-    maximum =np.max(points, axis=0)
-
-    width = maximum[0] - minimum[0]
-    length = maximum[1] - minimum[1]
-
-    center = ((minimum[0] + width/2), minimum[1] + length/2)
-    
-    premier_point_panneau = points[0]
-    dernier_point_panneau = points[-1]
-    
-    A = dernier_point_panneau[0] - premier_point_panneau[0]
-    B = dernier_point_panneau[1] - premier_point_panneau[1]
-
-    point_a_atteindre = (center[0]+A+0.05, center[1]+B+0.05)
+        if np.sqrt((x - self.panel_pose[0])**2 + (y - self.panel_pose[1])**2) < 0.1:
+            self.panel_reached = True
 
 
-    goal_pose = PoseStamped()
-    goal_pose.header.stamp = rospy.Time.now()
-    goal_pose.header.frame_id = "odom"
-
-    goal_pose.pose.position.x = point_a_atteindre[0]
-    goal_pose.pose.position.y = point_a_atteindre[1]
-
-    goal_publisher = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
-    goal_publisher.publish(goal_pose)
-    
-    
-    temp = 20
-    time.sleep(temp)
-
-    # re-calcul pour avoir une bonne orientation face au panneau 
-    point_a_atteindre = (center[0]+A, center[1]+B)
-
-    goal_pose.pose.position.x = point_a_atteindre[0]
-    goal_pose.pose.position.y = point_a_atteindre[1]
-    
-    goal_publisher = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
-    goal_publisher.publish(goal_pose)
+    def publish_goal(self, x, y, theta):
+        goal = PoseStamped()
+        goal.header.frame_id = "odom"
+        goal.header.stamp = rospy.Time.now()
+        goal.pose.position.x = x
+        goal.pose.position.y = y
+        q = quaternion_from_euler(0, 0, theta)
+        goal.pose.orientation = Quaternion(*q)
+        goal_publisher = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
+        goal_publisher.publish(goal)
 
 
+    def go_to_panel(self):
+        if self.last_scan is None:
+            return
+        
+        coords = []
+        intensities = []
+        
+        # conversion des points en coordonnées (x,y) et suppression des points infini et des points de faible intensité 
+        for i, theta in enumerate(np.arange(self.last_scan.angle_min, self.last_scan.angle_max, self.last_scan.angle_increment)):
+            
+            if not(self.last_scan.ranges[i] == float("inf")):
+                if self.last_scan.ranges[i] > 0.1 and self.last_scan.intensities[i] > 1000:
+                    coords.append((self.last_scan.ranges[i]*np.cos(theta), self.last_scan.ranges[i]*np.sin(theta))) 
+                    intensities.append(self.last_scan.intensities[i])
+        
+        # Create a PointCloud2 (si on souhaite les afficher dans rziv, on peut se servir de pc2)
+        pc2 = create_cloud(self.last_scan.header, PC2FIELDS, [[x,y,0,0] for x,y in coords])
+
+        points = np.array(list(read_points(pc2)))[:,:2]    
+        
+        # recherche du point à atteindre
+        minimum =np.min(points, axis=0)
+        maximum =np.max(points, axis=0)
+
+        width = maximum[0] - minimum[0]
+        length = maximum[1] - minimum[1]
+
+        center = ((minimum[0] + width/2), minimum[1] + length/2)
+        
+        premier_point_panneau = points[0]
+        dernier_point_panneau = points[-1]
+        
+        A = dernier_point_panneau[0] - premier_point_panneau[0]
+        B = dernier_point_panneau[1] - premier_point_panneau[1]
+
+        point_a_atteindre = (center[0]+A+0.05, center[1]+B+0.05)
+
+        self.publish_goal(point_a_atteindre[0], point_a_atteindre[1], 0)
+        self.state = "TURNING_ROBOT"
+        self.panel_pose = point_a_atteindre
+
+    def turn_robot(self):
+        # re-calcul pour avoir une bonne orientation face au panneau 
+        goal_pose = PoseStamped()
+        goal_pose.pose.position.x = self.panel_pose[0]
+        goal_pose.pose.position.y = self.panel_pose[1]
+
+        # orientation du robot
+        # TODO, et coder un turn robot dans le controller ?
+        
+        goal_publisher = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
+        goal_publisher.publish(goal_pose)
+
+    def callback_timer(self, _):
+        if self.state == "END":
+            return
+        
+        if self.state == "GOING_TO_PANEL":
+            self.go_to_panel()
+            print("Robot en route vers le panneau")
+
+        elif self.state == "TURNING_ROBOT":
+            if not self.panel_reached:
+                return
+            self.turn_robot()
+            self.state = "END"
+
+
+period = 0.1
 
 if __name__ == '__main__':
-    rospy.init_node('transformer')
-    pub_clusters = rospy.Publisher('/lidar/clusters', PointCloud2, queue_size=10)
-    #rospy.Subscriber('/lidar/points', PointCloud2, callback)
-
-    #pub_pc2 = rospy.Publisher('/lidar/points', PointCloud2, queue_size=10)
-    rospy.Subscriber('/scan', LaserScan, callback)
-
-    rospy.spin()
+    panneau = Panneau_Controller()
+    panneau.run()
