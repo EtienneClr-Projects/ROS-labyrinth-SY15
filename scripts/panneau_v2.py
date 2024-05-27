@@ -73,7 +73,7 @@ def callback(msg):
     
     
     temp = 20
-    time(temp)
+    time.sleep(temp)
 
     # re-calcul pour avoir une bonne orientation face au panneau 
     point_a_atteindre = (center[0]+A, center[1]+B)
