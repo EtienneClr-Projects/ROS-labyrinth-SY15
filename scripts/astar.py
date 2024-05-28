@@ -41,7 +41,41 @@ def distance_to_nearest_wall(pos, costmap, costmap_size):
     return min(distances) if distances else float('inf')
 
 
-def astar(start, goal, costmap_size, resolution, origin_x, origin_y, costmap):
+def convert_sequence_to_poses_path(path, start,resolution, origin_x, origin_y):
+    """
+    path is a sequence of (x,y) movement, with x,y = -1, 0 or 1
+    we convert the sequence to have only the keypoints of the movements
+    for instance the sequence (1,0) (1,0) (1,0) (0,1) will be (3,0) (0,1)
+    and then we convert the keypoints to global positions relative to start
+    """
+    path.append((0,0))
+    path = np.array(path)
+    last_move = np.array([0,0])
+    sum_of_last_moves = np.array([0,0])
+    new_sequence = []
+    for move in path:
+        if np.all(move == last_move):
+            sum_of_last_moves += move
+            last_move = move
+        else:
+            last_move = move
+            new_sequence.append(sum_of_last_moves)
+            sum_of_last_moves = move
+
+    # now we convert each movement as a global position
+    current = start
+    poses_path = []
+    for move in new_sequence:
+        current = [
+            move[0] * resolution + origin_x + current[0],
+            move[1] * resolution + origin_y + current[1]
+        ]
+        poses_path.append(current)
+
+    return poses_path
+
+
+def astar(start, goal, costmap_size, resolution, origin_x, origin_y, costmap, last_path_cost, last_path):
     grid_start = (
         int((start[0] - origin_x) / resolution + costmap_size // 2),
         int((start[1] - origin_y) / resolution + costmap_size // 2)
@@ -85,7 +119,7 @@ def astar(start, goal, costmap_size, resolution, origin_x, origin_y, costmap):
             if costmap[next_pos[1], next_pos[0]] >= 100:
                 chemin_deja_visite.add(new_state)
                 continue
-            margin = 0  # marge de sécurité en nombre de cellules
+            margin = 3  # marge de sécurité en nombre de cellules
             distance_wall = distance_to_nearest_wall(next_pos, costmap, costmap_size)
 
             # si on est trop proche d'un mur, la position ciblée prend un coup supplémentaire
@@ -104,13 +138,21 @@ def astar(start, goal, costmap_size, resolution, origin_x, origin_y, costmap):
             if new_state in chemin_deja_visite:
                 continue
 
-            # on vérifie si c'est notre destination
-            if next_pos == grid_goal:
-                return new_state.liste_actions
+            # on vérifie si c'est notre destination ou si on a atteint le nb d'actions max
+            max_actions = 50
+            if next_pos == grid_goal or len(new_state.liste_actions) >= max_actions:
+                # if current cost is not different from last_path_cost, then we just keep last path to not change everytime
+                if last_path_cost is not None and abs(next_cost - last_path_cost) < 10:
+                    print("return same path, diff = ", abs(next_cost - last_path_cost))
+                    return last_path, last_path_cost
+                if last_path_cost is not None:
+                    print(next_cost, last_path_cost, abs(next_cost - last_path_cost))
+                poses_path = convert_sequence_to_poses_path(new_state.liste_actions, start, resolution, origin_x, origin_y)
+                return poses_path, next_cost
             
             # on actualise le cost du prochain état en fonction des obstacles sur son chemin (distance mur, changement de direction par exemple)
             new_state.cost = next_cost
             
             # si aucune des conditions précédentes n'est remplie, on l'ajoute à notre liste des chemins à "étudier"
             liste_chemin.put((next_cost + dist(next_pos, grid_goal), new_state))
-    return None
+    return None, None

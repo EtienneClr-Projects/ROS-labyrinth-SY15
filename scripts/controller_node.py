@@ -39,7 +39,7 @@ class Controller:
 
         # control parameters
         self.max_linear_velocity = 0.15
-        self.max_angular_velocity = 0.1
+        self.max_angular_velocity = 0.2
         self.max_angular_velocity_while_moving = 0.4
 
         self.max_accel_lin = 0.05
@@ -47,7 +47,7 @@ class Controller:
         
         self.angle_control_pid = PID(1.0, 0.0, 0.0)
         self.speed_control_pid = PID(1.0, 0.0, 0.0)
-        self.dir_correction_pid = PID(3.0, 0.0, 0.0)
+        self.dir_correction_pid = PID(5., 0.0, 1.0)
 
         # State machine : When a goal is received
         # - first we turn to the right direction
