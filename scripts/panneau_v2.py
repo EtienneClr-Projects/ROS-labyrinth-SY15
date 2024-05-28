@@ -28,7 +28,8 @@ class Panneau_Controller():
 
         # we sub to /estimation to know when the robot has reached the panel
         rospy.Subscriber('/estimation', PoseWithCovarianceStamped, self.callback_estimation)
-
+        
+        period = 0.1
         rospy.Timer(rospy.Duration(period), self.callback_timer)
 
         # Two states
@@ -122,6 +123,7 @@ class Panneau_Controller():
         goal_publisher.publish(goal_pose)
 
     def callback_timer(self, _):
+        print(self.state)
         if self.state == "END":
             return
         
@@ -136,7 +138,6 @@ class Panneau_Controller():
             self.state = "END"
 
 
-period = 0.1
 
 if __name__ == '__main__':
     panneau = Panneau_Controller()
