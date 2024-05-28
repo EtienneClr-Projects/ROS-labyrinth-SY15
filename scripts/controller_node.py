@@ -41,9 +41,13 @@ class Controller:
         self.max_linear_velocity = 0.15
         self.max_angular_velocity = 0.1
         self.max_angular_velocity_while_moving = 0.4
+
+        self.max_accel_lin = 0.05
+        self.max_accel_ang = 0.1
+        
         self.angle_control_pid = PID(1.0, 0.0, 0.0)
         self.speed_control_pid = PID(1.0, 0.0, 0.0)
-        self.dir_correction_pid = PID(10.0, 0.0, 0.0)
+        self.dir_correction_pid = PID(3.0, 0.0, 0.0)
 
         # State machine : When a goal is received
         # - first we turn to the right direction
@@ -52,6 +56,8 @@ class Controller:
         self.is_moving = False
 
         self.last_time = time()
+        self.linear_speed = 0.
+        self.angular_speed = 0.
 
 
     def receive_estimate_pose(self, msg):
@@ -190,6 +196,34 @@ class Controller:
         
         if self.target_pose is not None:
             self.publish_goal(self.target_pose)
+
+
+        # acceleration
+        dt = time() - self.last_time
+        self.last_time = time()
+
+        # self._speed is speed at (t)
+        # _speed is speed at (t+dt)
+        # accel is equal to (_speed - self._speed) / dt
+        accel_lin = (linear_speed - self.linear_speed) / dt
+        accel_ang = (angular_speed - self.angular_speed) / dt
+
+        if accel_lin > self.max_accel_lin:
+            linear_speed = self.linear_speed + self.max_accel_lin * dt
+        if accel_lin < -self.max_accel_lin:
+            linear_speed = self.linear_speed - self.max_accel_lin * dt
+        if accel_ang > self.max_accel_ang:
+            angular_speed = self.angular_speed + self.max_accel_ang * dt
+        if accel_ang < -self.max_accel_ang:
+            angular_speed = self.angular_speed - self.max_accel_ang * dt
+
+        self.linear_speed = linear_speed
+        self.angular_speed = angular_speed
+
+    
+        print(linear_speed, angular_speed,"\t", dt)
+
+
         self.publish_cmd_vel(linear_speed,angular_speed)
 
     def publish_cmd_vel(self,linear_speed,angular_speed):
