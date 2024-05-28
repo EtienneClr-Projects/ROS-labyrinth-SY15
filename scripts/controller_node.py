@@ -39,15 +39,11 @@ class Controller:
 
         # control parameters
         self.max_linear_velocity = 0.15
-        self.max_angular_velocity = 0.2
+        self.max_angular_velocity = 0.1
         self.max_angular_velocity_while_moving = 0.4
-
-        self.max_accel_lin = 0.05
-        self.max_accel_ang = 0.1
-        
         self.angle_control_pid = PID(1.0, 0.0, 0.0)
         self.speed_control_pid = PID(1.0, 0.0, 0.0)
-        self.dir_correction_pid = PID(5., 0.0, 1.0)
+        self.dir_correction_pid = PID(10.0, 0.0, 0.0)
 
         # State machine : When a goal is received
         # - first we turn to the right direction
@@ -56,8 +52,6 @@ class Controller:
         self.is_moving = False
 
         self.last_time = time()
-        self.linear_speed = 0.
-        self.angular_speed = 0.
 
 
     def receive_estimate_pose(self, msg):
@@ -143,8 +137,8 @@ class Controller:
                 angle_error_rad += 2 * pi
 
             # if we are close enough to the targeted angle, we stop
-            if abs(angle_error_rad) < 30*pi/180 and not self.is_moving or self.is_moving and abs(angle_error_rad)< 0.005:
-                # print("ANGLE OK")
+            if abs(angle_error_rad) < 5*pi/180 and not self.is_moving or self.is_moving and abs(angle_error_rad)< 0.001:
+                print("ANGLE OK")
                 # self.is_turning = False # uncomment to do only translation in the second phase
                 self.is_moving = True
                 angular_speed = 0.
@@ -163,8 +157,8 @@ class Controller:
 
         if self.is_moving:
             # if we are close enough to the target, we stop
-            if np.linalg.norm(error_vector[:2]) < 0.05:
-                # print("POSITION OK", error_vector[:2])
+            if np.linalg.norm(error_vector[:2]) < 0.01:
+                print("POSITION OK", error_vector[:2])
                 self.is_moving = False
                 self.is_turning = False
                 self.target_pose = None
@@ -192,38 +186,10 @@ class Controller:
                     correction = correction_max
                 if correction < -correction_max:
                     correction = -correction_max
-                angular_speed -= correction
+                angular_speed += correction
         
         if self.target_pose is not None:
             self.publish_goal(self.target_pose)
-
-
-        # acceleration
-        dt = time() - self.last_time
-        self.last_time = time()
-
-        # self._speed is speed at (t)
-        # _speed is speed at (t+dt)
-        # accel is equal to (_speed - self._speed) / dt
-        accel_lin = (linear_speed - self.linear_speed) / dt
-        accel_ang = (angular_speed - self.angular_speed) / dt
-
-        if accel_lin > self.max_accel_lin:
-            linear_speed = self.linear_speed + self.max_accel_lin * dt
-        if accel_lin < -self.max_accel_lin:
-            linear_speed = self.linear_speed - self.max_accel_lin * dt
-        if accel_ang > self.max_accel_ang:
-            angular_speed = self.angular_speed + self.max_accel_ang * dt
-        if accel_ang < -self.max_accel_ang:
-            angular_speed = self.angular_speed - self.max_accel_ang * dt
-
-        self.linear_speed = linear_speed
-        self.angular_speed = angular_speed
-
-    
-        print(linear_speed, angular_speed,"\t", dt)
-
-
         self.publish_cmd_vel(linear_speed,angular_speed)
 
     def publish_cmd_vel(self,linear_speed,angular_speed):
@@ -237,7 +203,7 @@ class Controller:
         rospy.spin()
 
        
-period = 0.1
+period = 0.05
 
 if __name__ == "__main__":
     node = Controller()
