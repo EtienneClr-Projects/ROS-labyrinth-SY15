@@ -1,0 +1,24 @@
+<launch>
+  <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
+  <arg name="x_pos" default="0.0"/>
+  <arg name="y_pos" default="0.0"/>
+  <arg name="z_pos" default="0.0"/>
+
+  <param name="/use_sim_time" value="true"/>
+  <!-- <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find ros_labyrinth_sy15)/worlds/Labyrinthe.world"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+  </include>   -->
+  <param name="robot_description" command="$(find xacro)/xacro $(find ros_labyrinth_sy15)/urdf/turtlebot3_$(arg model)_no_lidar.urdf.xacro" />
+  
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher">
+    <param name="robot_description" command="$(find xacro)/xacro $(find ros_labyrinth_sy15)/urdf/turtlebot3_$(arg model)_no_lidar.gazebo.xacro" />
+    <param name="use_sim_time" value="true"/>
+  </node>
+  <node pkg="tf" type="static_transform_publisher" name="base_to_odom_broadcaster" args="0 0 0 0 0 0 base_scan odom 100" />
+  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model turtlebot3_burger -x $(arg x_pos) -y $(arg y_pos) -z $(arg z_pos) -param robot_description" />
+</launch>

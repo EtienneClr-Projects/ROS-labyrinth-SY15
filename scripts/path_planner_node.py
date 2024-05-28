@@ -1,36 +1,16 @@
 #!/usr/bin/env python3
 
-import rospy, queue, os, cv2, pickle
-
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, Quaternion
+from std_msgs.msg import Empty
 from tf.transformations import quaternion_from_euler
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, Path
 
 import numpy as np
-from math import cos, sin, atan2
+import rospy
+from math import cos, sin, atan2, pi, sqrt
 
-class Etats():
-    def __init__(self, x, y, cost, liste_actions):
-        self.x = x
-        self.y = y
-        self.cost = cost
-        self.liste_actions = liste_actions
-
-    def __eq__(self, other):
-        if hash(self) == hash(other):
-            return True
-        return False
-    
-    def __hash__(self):
-        return hash((self.x, self.y))
-    
-    def __lt__(self, other):
-        return self.cost < other.cost
-    
-    def __str__(self):
-        return self.liste_actions
-
+from astar import astar
 
 class PathPlanner:
     def __init__(self):
@@ -44,36 +24,50 @@ class PathPlanner:
         # sub to the lidar
         self.lidar_subscriber = rospy.Subscriber("/scan", LaserScan, self.receive_lidar)
 
-        # pub the goal
-        self.goal_publisher = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=1)
-        self.goal_pose = np.array([4., -1., 0.])
-
         # pub the costmap
         self.costmap_publisher = rospy.Publisher("/costmap", OccupancyGrid, queue_size=1)
 
-        # debug path
-        self.path_pub = rospy.Publisher('/path_debug', Path, queue_size=10)
+        # path
+        self.path_pub = rospy.Publisher('/path', Path, queue_size=10)
+
+        self.is_goal_reached_sub = rospy.Subscriber("/is_goal_reached", Empty, self.receive_goal_reached)
+        self.goal_reached = True
+        self.goal_pose = np.array([4., -1., 0.])
+
+        self.last_path = None
+        self.last_path_cost = None
 
         # costmap
-        self.costmap_size = 800  # points
-        self.resolution = 0.05 # 5 cm
-        self.costmap = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
+        self.costmap_size = 200  # points
+        self.resolution = 0.05 # 5cm
+        self.obstacle_layer = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
         self.origin_x = 0
         self.origin_y = 0
 
+        self.inflation_layer = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
+
+        # timer callback update costmap
+        self.last_scan = None
+        rospy.Timer(rospy.Duration(1.), self.update_costmap_callback)
+
+    def receive_goal_reached(self, msg):
+        self.goal_reached = True
+
     def receive_lidar(self, msg):
-        # update the costmap
         self.update_costmap(msg)
       
     def receive_estimate_pose(self, msg):
-        # Récupération de la position estimée
+        # get estimated position
         self.current_pose = np.array([msg.pose.pose.position.x,
                                      msg.pose.pose.position.y,
                                      atan2(msg.pose.pose.orientation.z, msg.pose.pose.orientation.w) * 2])
-        
+
     def update_costmap(self, scan):
-        print(f"costmap updated")
         # update the costmap with the lidar data
+        self.last_scan = scan
+
+    def update_costmap_callback(self, _):
+        scan = self.last_scan
         for i, distance in enumerate(scan.ranges):
             if distance < scan.range_min or distance > scan.range_max:
                 continue
@@ -84,7 +78,19 @@ class PathPlanner:
             grid_y = int((y - self.origin_y) / self.resolution + self.costmap_size // 2)
 
             if 0 <= grid_x < self.costmap_size and 0 <= grid_y < self.costmap_size:
-                self.costmap[grid_x, grid_y] = 100  # Mark the cell as occupied
+                self.obstacle_layer[grid_y, grid_x] = 100  # Mark the cell as occupied
+
+
+        # update inflation layer
+        self.inflation_layer = np.zeros((self.costmap_size, self.costmap_size), dtype=np.int8)
+        for i in range(self.costmap_size):
+            for j in range(self.costmap_size):
+                if self.obstacle_layer[j, i] == 100:
+                    for k in range(-3, 4):
+                        for l in range(-3, 4):
+                            if 0 <= i + k < self.costmap_size and 0 <= j + l < self.costmap_size:
+                                self.inflation_layer[j + l, i + k] += 10
+                    self.inflation_layer[j, i] = 100
 
 
         # publish the costmap
@@ -101,98 +107,20 @@ class PathPlanner:
         costmap_msg.info.origin.orientation.y = 0
         costmap_msg.info.origin.orientation.z = 0
         costmap_msg.info.origin.orientation.w = 1
-        costmap_msg.data = self.costmap.flatten().tolist()
+        # costmap_msg.data = self.inflation_layer.flatten().tolist()
+        costmap_msg.data = self.obstacle_layer.flatten().tolist()
         self.costmap_publisher.publish(costmap_msg)
 
 
     def run(self):
         rospy.spin()
 
-    
-    def astar(self, start, goal):
-        def dist_manhattan(pos1, pos2):
-            return np.linalg.norm(np.array(pos2) - np.array(pos1))
-            #return abs(pos2[0] - pos1[0]) + abs(pos2[1] - pos1[1])
-        
-        state = Etats(start[0], start[1], 0, [])
-
-        # liste des actions possible pour le robot
-        actions = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)]
-        # setup des listes
-        liste_chemin = queue.PriorityQueue()
-        chemin_deja_visite = set()
-        # premire valeur dans la liste
-        liste_chemin.put((0, state))
-        while not liste_chemin.empty():
-            print("iteration")
-            # on récupère le tuple en première position dans la liste
-            node = liste_chemin.get()
-            current_state = node[1]
-            print(f"current state pos : {current_state.x, current_state.y}")
-            actual_cost = current_state.cost
-            # on vérifie si c'est un chemin déjà visité
-            if current_state in chemin_deja_visite:
-                continue
-            chemin_deja_visite.add(current_state)
-            for dx, dy in actions:
-                next_pos = (current_state.x + dx, current_state.y + dy)
-                next_cost = -1 if (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] else 0
-                next_cost = dist_manhattan(next_pos, goal) + next_cost
-                new_state = Etats(current_state.x + dx, current_state.y + dy, next_cost, current_state.liste_actions + [(dx, dy)])
-                print(f"new state x : {new_state.x} ; y : {new_state.y} ; costmap : {self.costmap[new_state.x, new_state.y]} ; path cost : {new_state.cost}")
-                if self.costmap[next_pos[0], next_pos[1]] == 100:
-                    chemin_deja_visite.add(new_state)
-                    continue
-                if any(self.costmap[next_pos[0] + dy, next_pos[1] + dx] == 100 for dx in range(-1, 2) for dy in range(-1, 2)):
-                    chemin_deja_visite.add(new_state)
-                    continue
-                # on vérifie si c'est un chemin déjà visité
-                if new_state in chemin_deja_visite:
-                    continue
-                if next_pos == goal:
-                    # il faut créer le chemin
-                    print(f"nous avons un chemin possible")
-                    print(f"liste actions : {new_state.liste_actions}")
-                    return new_state.liste_actions
-                liste_chemin.put((next_cost, new_state))
-        return None
-    
-
-    def planning_loop(self, event):
-        self.one = True
-        start = (self.current_pose[0], self.current_pose[1])
-        goal = (self.goal_pose[0], self.goal_pose[1])
-
-        grid_start = (
-            int((start[0] - self.origin_x) / self.resolution + self.costmap_size // 2),
-            int((start[1] - self.origin_y) / self.resolution + self.costmap_size // 2)
-        )
-        
-        grid_goal = (
-            int((goal[0] - self.origin_x) / self.resolution + self.costmap_size // 2),
-            int((goal[1] - self.origin_y) / self.resolution + self.costmap_size // 2)
-        )
-        
-        # home_dir = os.path.expanduser("~")
-        # save_dir = os.path.join(home_dir, "CM")
-        # if not os.path.exists(save_dir):
-        #     os.makedirs(save_dir)
-        # cv2.imwrite(os.path.join(save_dir, "costmap_image.jpg"), self.costmap)
-        
-        # # Etudier la costmap pour vérifier le tableau : il est mal positionné ce qui génère un problème dans les emplacements
-        # with open(os.path.join(save_dir, 'costmap.pkl'), 'wb') as f:
-        #     pickle.dump(self.costmap, f)
-
-        path = self.astar(grid_start, grid_goal)
-
-        # Create a Path message
+    def publish_path(self, path):
         path_msg = Path()
         path_msg.header.stamp = rospy.Time.now()
         path_msg.header.frame_id = "odom"
 
-
         poses = []
-        current_pos = grid_start
 
         if path is None:
             return
@@ -201,12 +129,10 @@ class PathPlanner:
             pose = PoseStamped()
             pose.header.stamp = rospy.Time.now()
             pose.header.frame_id = "odom"
-            current_pos = (current_pos[0] + action[0], current_pos[1] + action[1])
-            pose.pose.position.x = (current_pos[0] - self.costmap_size // 2) * self.resolution + self.origin_x
-            pose.pose.position.y = (current_pos[1] - self.costmap_size // 2) * self.resolution + self.origin_y
+            pose.pose.position.x = action[0]
+            pose.pose.position.y = action[1]
             pose.pose.position.z = 0
 
-            # Optionally set the orientation of the pose (quaternion)
             pose.pose.orientation.x = 0.0
             pose.pose.orientation.y = 0.0
             pose.pose.orientation.z = 0.0
@@ -217,32 +143,38 @@ class PathPlanner:
         path_msg.poses = poses
         path_msg.header.stamp = rospy.Time.now()
         self.path_pub.publish(path_msg)
+
+    def planning_loop(self, _):
         
-        current_pos = grid_start
+        start = (self.current_pose[0], self.current_pose[1])
+        goal = (self.goal_pose[0], self.goal_pose[1])
 
-        for next_point in path:
-            current_pos = (current_pos[0] + next_point[0], current_pos[1] + next_point[1])
 
-            goal_pose = PoseStamped()
-            goal_pose.header.stamp = rospy.Time.now()
-            goal_pose.header.frame_id = "odom"
+        poses_path, cost = astar(start, goal, self.costmap_size, self.resolution, self.origin_x, self.origin_y, self.obstacle_layer, self.last_path_cost, self.last_path)
+        self.last_path = poses_path
+        self.last_path_cost = cost
+        if poses_path is None:
+            print("path is None")
+            return
+        self.goal_reached = False
 
-            goal_pose.pose.position.x = (current_pos[0] - self.costmap_size // 2) * self.resolution + self.origin_x
-            goal_pose.pose.position.y = (current_pos[1] - self.costmap_size // 2) * self.resolution + self.origin_y
-            goal_pose.pose.position.z = 0
+        
 
-            q = quaternion_from_euler(0, 0, self.goal_pose[2])
-            goal_pose.pose.orientation = Quaternion(*q)
+        # we pop the next positions while they are too close to the current pose
+        # def is_too_near(pos1, pos2):
+        #     print(np.linalg.norm(np.array(pos1) - np.array(pos2)))
+        #     return np.linalg.norm(np.array(pos1) - np.array(pos2)) < 0.05
+        
+        # while poses_path and is_too_near(self.current_pose[:2], poses_path[0]):
+        #     poses_path.pop(0)
 
-            self.goal_publisher.publish(goal_pose)
+        # # insert back the current pose
+        # poses_path.insert(0, (self.current_pose[0], self.current_pose[1]))
+
+        self.publish_path(poses_path)
+        print("published path")
+
     
-
-            # TODO : here, launch a A* instance to find the path to the goal from the current position
-            # use the costmap to avoid obstacles
-            # publish the goal (which will be handled by the controller)
-            # pass
-        
-
        
 period = 0.2 # seconds
 
