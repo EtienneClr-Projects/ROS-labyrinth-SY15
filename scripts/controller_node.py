@@ -41,9 +41,13 @@ class Controller:
         self.max_linear_velocity = 0.15
         self.max_angular_velocity = 0.1
         self.max_angular_velocity_while_moving = 0.4
+
+        self.max_accel_lin = 0.05
+        self.max_accel_ang = 0.5
+        
         self.angle_control_pid = PID(1.0, 0.0, 0.0)
         self.speed_control_pid = PID(1.0, 0.0, 0.0)
-        self.dir_correction_pid = PID(10.0, 0.0, 0.0)
+        self.dir_correction_pid = PID(1., 0.0, 0.0)
 
         # State machine : When a goal is received
         # - first we turn to the right direction
@@ -92,8 +96,10 @@ class Controller:
         for seg in segs:
             dist = abs(dist_point_to_segment_signed(self.current_pose[:2], seg[0], seg[1]))
             if dist < min_dist:
-                min_dist = dist
-                nearest_seg = seg
+                # if dist between current pose and seg[1] too low we don't take it
+                if np.linalg.norm(self.current_pose[:2]-seg[1]) > 0.05:
+                    min_dist = dist
+                    nearest_seg = seg
 
         return nearest_seg
 
@@ -101,21 +107,8 @@ class Controller:
         self.path = path_msg
         self.target_pose = self.get_next_goal_on_path(self.path)[1] # end of the current segment
 
-        # # if received same goal, return
-        # if self.target_pose is not None and almost_equal(new_target_pose, self.target_pose):
-        #     return
-        # self.target_pose = new_target_pose # TODO USEFUL??
-
         self.is_turning = True
         self.is_moving = False
-
-        # modulo of the angle
-        # if self.target_pose[2] > pi:
-        #     self.target_pose[2] -= 2 * pi
-        # if self.target_pose[2] < -pi:
-        #     self.target_pose[2] += 2 * pi # TODO USEFUL ??
-
-    
 
     def control_loop(self,_):
         if self.path is not None:
@@ -190,6 +183,34 @@ class Controller:
         
         if self.target_pose is not None:
             self.publish_goal(self.target_pose)
+
+
+        # acceleration
+        dt = time() - self.last_time
+        self.last_time = time()
+
+        # self._speed is speed at (t)
+        # _speed is speed at (t+dt)
+        # accel is equal to (_speed - self._speed) / dt
+        accel_lin = (linear_speed - self.linear_speed) / dt
+        accel_ang = (angular_speed - self.angular_speed) / dt
+
+        if accel_lin > self.max_accel_lin:
+            linear_speed = self.linear_speed + self.max_accel_lin * dt
+        # if accel_lin < -self.max_accel_lin:
+        #     linear_speed = self.linear_speed - self.max_accel_lin * dt
+        if accel_ang > self.max_accel_ang:
+            angular_speed = self.angular_speed + self.max_accel_ang * dt
+        # if accel_ang < -self.max_accel_ang:
+        #     angular_speed = self.angular_speed - self.max_accel_ang * dt
+
+        self.linear_speed = linear_speed
+        self.angular_speed = angular_speed
+
+    
+        print(linear_speed, angular_speed,"\t", dt)
+
+
         self.publish_cmd_vel(linear_speed,angular_speed)
 
     def publish_cmd_vel(self,linear_speed,angular_speed):
