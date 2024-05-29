@@ -44,6 +44,7 @@ class Controller:
 
         self.max_accel_lin = 0.05
         self.max_accel_ang = 0.5
+        self.linear_speed, self.angular_speed = 0, 0
         
         self.angle_control_pid = PID(1.0, 0.0, 0.0)
         self.speed_control_pid = PID(1.0, 0.0, 0.0)
@@ -120,9 +121,14 @@ class Controller:
 
         linear_speed, angular_speed = 0., 0.
         error_vector = self.target_pose[:2] - self.current_pose[:2]
+        
+        
+        angle_error_rad = atan2(error_vector[1], error_vector[0]) - self.current_pose[2]
+        if abs(angle_error_rad) > 0.5: # if we're too far from the target angle, we turn first
+            self.is_turning = True
+            self.is_moving = False
 
         if self.is_turning:
-            angle_error_rad = atan2(error_vector[1], error_vector[0]) - self.current_pose[2]
             # modulo
             if angle_error_rad > pi:
                 angle_error_rad -= 2 * pi
@@ -130,7 +136,7 @@ class Controller:
                 angle_error_rad += 2 * pi
 
             # if we are close enough to the targeted angle, we stop
-            if abs(angle_error_rad) < 5*pi/180 and not self.is_moving or self.is_moving and abs(angle_error_rad)< 0.001:
+            if abs(angle_error_rad) < 1*pi/180 and not self.is_moving or self.is_moving and abs(angle_error_rad)< 0.001:
                 print("ANGLE OK")
                 # self.is_turning = False # uncomment to do only translation in the second phase
                 self.is_moving = True
