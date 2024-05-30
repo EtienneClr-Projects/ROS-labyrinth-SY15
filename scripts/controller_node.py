@@ -105,6 +105,7 @@ class Controller:
         return nearest_seg
 
     def receive_path(self, path_msg):
+        print("received path")
         self.path = path_msg
         self.target_pose = self.get_next_goal_on_path(self.path)[1] # end of the current segment
 
@@ -117,6 +118,7 @@ class Controller:
             self.target_pose = self.current_segment[1] # end of the current segment
 
         if self.target_pose is None:  # TODO useful?
+            print("target pose is none")
             return
 
         linear_speed, angular_speed = 0., 0.

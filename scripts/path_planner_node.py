@@ -195,7 +195,7 @@ class PathPlanner:
 
     
        
-period = 0.2 # seconds
+period = 0.05 # seconds
 
 if __name__ == "__main__":
     node = PathPlanner()
