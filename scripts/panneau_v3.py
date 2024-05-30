@@ -117,7 +117,7 @@ class Panneau_Controller():
         print("in go to panel")
         
         coords = []
-        intensities = []
+        liste_intensities = []
         
         # conversion des points en coordonnées (x,y) et suppression des points infini et des points de faible intensité 
         for i, theta in enumerate(np.arange(self.last_scan.angle_min, self.last_scan.angle_max, self.last_scan.angle_increment)):
@@ -125,23 +125,23 @@ class Panneau_Controller():
             if not(self.last_scan.ranges[i] == float("inf")) and self.last_scan.ranges[i] > 0.5:
                 if self.last_scan.ranges[i] > 0.1 and self.last_scan.intensities[i] > 5000:
                     coords.append((self.last_scan.ranges[i]*np.cos(theta), self.last_scan.ranges[i]*np.sin(theta))) 
-                    intensities.append(self.last_scan.intensities[i])
+                    liste_intensities.append(self.last_scan.intensities[i])
         
         # sécurité
-        if not intensities:
+        if not liste_intensities:
             return
         
         k = 2 # nb de point choisie pour faire les clusters 
         D = 0.03 # distance entre les points
 
         d = np.zeros(k, dtype=float)
-        points = np.array(coords) # liste des points
-        groups_idx = np.zeros(points.shape[0], dtype=int) # liste comprenant le numéro des groupes de chaque point
+        liste_points = np.array(coords) # liste des points
+        groups_idx = np.zeros(liste_points.shape[0], dtype=int) # liste comprenant le numéro des groupes de chaque point
 
         # Clustering algorithm
-        for i in range(k, points.shape[0]):
+        for i in range(k, liste_points.shape[0]):
             for j in range(1, k + 1):
-                d[j - 1] = np.linalg.norm(points[i] - points[i - j])
+                d[j - 1] = np.linalg.norm(liste_points[i] - liste_points[i - j])
             d_min = np.min(d)
             j_min = np.argmin(d) + 1
 
@@ -152,14 +152,56 @@ class Panneau_Controller():
             else:
                 groups_idx[i] = max(groups_idx) + 1
 
-        # recherche du cluster avec le plus de points
-        _, counts = np.unique(groups_idx, return_counts=True)
-        max_count_idx = np.argmax(counts)
-        association = [[point[0], point[1], idx] for idx, point in zip(groups_idx, points) if idx == max_count_idx]
 
+        # groups_idx nous donne une liste avec pour chaque point le numéro du groupe auquel il appartient.
+        # Ex : groups_idx = [0,0,0,1,1,0,0,1,2,2,2,3,2,3,3,3]
+
+
+        # on souahite regrouper les points de même clusters dans une liste
+        liste_cluster_point = [] # liste de liste de point de même cluster
+        liste_cluster_intensite = []
+
+        for num_cluster in range(max(groups_idx)):
+            liste_point_temp = []
+            liste_intensite_temp = []
+
+            for i,point in enumerate(liste_points):
+                if num_cluster == groups_idx[i]: # numéro du cluster est égale à l'index du cluster
+                    liste_point_temp.append(point)
+                    liste_intensite_temp.append(liste_intensities[i])
+                
+            liste_cluster_intensite.append(liste_intensite_temp)
+            liste_cluster_point.append(liste_point_temp)
+
+        #on a 2 listes contenant à chaque fois des listes qui contiennent des points ou des intensités
+        # Ex : [[(x,y),(x,y)], [(x,y),(x,y)...], ...]
+
+
+        # recherche de l'intensité la plus élevé
+        moyenne_intensite_max = 0
+        numero_groupe_intensité_max = 0
+        for num_group, list_intensite in enumerate(liste_cluster_intensite):
+            if np.mean(list_intensite) > moyenne_intensite_max:
+                moyenne_intensite_max = np.mean(list_intensite)
+                numero_groupe_intensité_max = num_group
+
+        # on obtient le numéro du groupe avec la plus hautes valeurs pour l'intensité (ce qui correspond au cluster du panneau)
+
+        # liste des points du panneau uniquement 
+        liste_point_panneau = liste_cluster_point[numero_groupe_intensité_max]
+
+
+
+        # recherche du cluster avec le plus de points
+        # _, counts = np.unique(groups_idx, return_counts=True)
+        # max_count_idx = np.argmax(counts)
+        # association = [[point[0], point[1], idx] for idx, point in zip(groups_idx, points) if idx == max_count_idx]
+        
+
+        # affichage des points du panneau 
         bboxes = MarkerArray()
 
-        for i, point in enumerate(association):
+        for i, point in enumerate(liste_point_panneau):
             bbox = Marker()
             bbox.header = self.last_scan.header
             bbox.id = i
