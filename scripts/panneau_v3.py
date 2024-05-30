@@ -127,22 +127,16 @@ class Panneau_Controller():
                     coords.append((self.last_scan.ranges[i]*np.cos(theta), self.last_scan.ranges[i]*np.sin(theta))) 
                     intensities.append(self.last_scan.intensities[i])
         
+        # sécurité
         if not intensities:
             return
         
-        k = 10 # nb de point choisie pour faire les clusters 
-        D = 0.1 # distance entre les points
+        k = 2 # nb de point choisie pour faire les clusters 
+        D = 0.03 # distance entre les points
 
         d = np.zeros(k, dtype=float)
         points = np.array(coords) # liste des points
         groups_idx = np.zeros(points.shape[0], dtype=int) # liste comprenant le numéro des groupes de chaque point
-
-        current_group = 1
-
-        # Initialisation des k premiers points avec des groupes uniques
-        for i in range(k):
-            groups_idx[i] = current_group
-            current_group += 1
 
         # Clustering algorithm
         for i in range(k, points.shape[0]):
@@ -158,11 +152,10 @@ class Panneau_Controller():
             else:
                 groups_idx[i] = max(groups_idx) + 1
 
+        # recherche du cluster avec le plus de points
         _, counts = np.unique(groups_idx, return_counts=True)
         max_count_idx = np.argmax(counts)
         association = [[point[0], point[1], idx] for idx, point in zip(groups_idx, points) if idx == max_count_idx]
-
-        print(association)
 
         bboxes = MarkerArray()
 
