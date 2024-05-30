@@ -34,9 +34,6 @@ class PathPlanner:
         self.goal_reached = True
         self.goal_pose = np.array([4., -1., 0.])
 
-        self.last_path = None
-        self.last_path_cost = None
-
         # costmap
         self.costmap_size = 200  # points
         self.resolution = 0.05 # 5cm
@@ -107,7 +104,7 @@ class PathPlanner:
         costmap_msg.info.origin.orientation.y = 0
         costmap_msg.info.origin.orientation.z = 0
         costmap_msg.info.origin.orientation.w = 1
-        # costmap_msg.data = self.inflation_layer.flatten().tolist()
+        #costmap_msg.data = self.inflation_layer.flatten().tolist()
         costmap_msg.data = self.obstacle_layer.flatten().tolist()
         self.costmap_publisher.publish(costmap_msg)
 
@@ -144,32 +141,54 @@ class PathPlanner:
         path_msg.header.stamp = rospy.Time.now()
         self.path_pub.publish(path_msg)
 
+    def convert_sequence_to_poses_path(self, path, start):
+        """
+        path is a sequence of (x,y) movement, with x,y = -1, 0 or 1
+        we convert the sequence to have only the keypoints of the movements
+        for instance the sequence (1,0) (1,0) (1,0) (0,1) will be (3,0) (0,1)
+        and then we convert the keypoints to global positions relative to start
+        """
+        path.append((0,0))
+        path = np.array(path)
+        last_move = np.array([0,0])
+        sum_of_last_moves = np.array([0,0])
+        new_sequence = []
+        for move in path:
+            if np.all(move == last_move):
+                sum_of_last_moves += move
+                last_move = move
+            else:
+                last_move = move
+                new_sequence.append(sum_of_last_moves)
+                sum_of_last_moves = move
+
+        # now we convert each movement as a global position
+        current = start
+        poses_path = []
+        for move in new_sequence:
+            current = [
+                move[0] * self.resolution + self.origin_x + current[0],
+                move[1] * self.resolution + self.origin_y + current[1]
+            ]
+            poses_path.append(current)
+
+        return poses_path
+    
     def planning_loop(self, _):
+        # def is_too_near(pos1, pos2): # TODO delete ?
+        #     return np.linalg.norm(np.array(pos1) - np.array(pos2)) < 0.05
         
         start = (self.current_pose[0], self.current_pose[1])
         goal = (self.goal_pose[0], self.goal_pose[1])
 
 
-        poses_path, cost = astar(start, goal, self.costmap_size, self.resolution, self.origin_x, self.origin_y, self.obstacle_layer, self.last_path_cost, self.last_path)
-        self.last_path = poses_path
-        self.last_path_cost = cost
-        if poses_path is None:
-            print("path is None")
+        movement_sequence = astar(start, goal, self.costmap_size, self.resolution, self.origin_x, self.origin_y, self.obstacle_layer)
+        if movement_sequence is None:
+            print("movement seq is None")
             return
         self.goal_reached = False
 
-        
-
-        # we pop the next positions while they are too close to the current pose
-        # def is_too_near(pos1, pos2):
-        #     print(np.linalg.norm(np.array(pos1) - np.array(pos2)))
-        #     return np.linalg.norm(np.array(pos1) - np.array(pos2)) < 0.05
-        
-        # while poses_path and is_too_near(self.current_pose[:2], poses_path[0]):
-        #     poses_path.pop(0)
-
-        # # insert back the current pose
-        # poses_path.insert(0, (self.current_pose[0], self.current_pose[1]))
+        poses_path = self.convert_sequence_to_poses_path(movement_sequence, start)
 
         self.publish_path(poses_path)
         print("published path")

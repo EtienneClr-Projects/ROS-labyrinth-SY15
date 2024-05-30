@@ -37,6 +37,9 @@ class Controller:
         # current estimated position
         self.current_pose = np.array([0., 0., 0.]) #x,y,theta
 
+        self.target_idx = 0
+        self.end_path = False
+
         # control parameters
         self.max_linear_velocity = 0.15
         self.max_angular_velocity = 0.1
@@ -94,13 +97,19 @@ class Controller:
 
         min_dist = float('inf')
         nearest_seg = None
-        for seg in segs:
+        for idx, seg in enumerate(segs):
             dist = abs(dist_point_to_segment_signed(self.current_pose[:2], seg[0], seg[1]))
             if dist < min_dist:
                 # if dist between current pose and seg[1] too low we don't take it
-                if np.linalg.norm(self.current_pose[:2]-seg[1]) > 0.05:
+                if idx >= self.target_idx and np.linalg.norm(self.current_pose[:2]-seg[1]) > 0.01:
                     min_dist = dist
                     nearest_seg = seg
+                    self.target_idx = idx
+        
+        # forced the last position if we are moving to the last target
+        # fixed a bug
+        if self.target_idx == len(segs):
+            nearest_seg = segs[-1]
 
         return nearest_seg
 
@@ -114,7 +123,17 @@ class Controller:
 
     def control_loop(self,_):
         if self.path is not None:
+            #print(f"path {self.path}")
             self.current_segment = self.get_next_goal_on_path(self.path)
+            if self.current_segment is None:
+                print(f"fin du path")
+                self.linear_speed = 0
+                self.angular_speed = 0
+                linear_speed = 0
+                angular_speed = 0
+                #print(linear_speed, angular_speed,"\t", dt)
+                self.publish_cmd_vel(linear_speed,angular_speed)
+                return
             self.target_pose = self.current_segment[1] # end of the current segment
 
         if self.target_pose is None:  # TODO useful?
@@ -214,10 +233,8 @@ class Controller:
 
         self.linear_speed = linear_speed
         self.angular_speed = angular_speed
-
     
         print(linear_speed, angular_speed,"\t", dt)
-
 
         self.publish_cmd_vel(linear_speed,angular_speed)
 
